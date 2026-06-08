@@ -1,0 +1,78 @@
+.pantry-form {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.pantry-tabs {
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  padding-bottom: 0.25rem;
+}
+
+.pantry-tabs .chip {
+  flex-shrink: 0;
+}
+
+.pantry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pantry-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--card-bg);
+  border-radius: var(--radius-sm);
+  padding: 0.875rem 1rem;
+  box-shadow: var(--shadow);
+  border-left: 4px solid transparent;
+}
+
+.pantry-item-ok {
+  border-left-color: var(--success);
+}
+
+.pantry-item-warning {
+  border-left-color: var(--warning);
+}
+
+.pantry-item-expired {
+  border-left-color: var(--danger);
+  opacity: 0.7;
+}
+
+.pantry-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pantry-item-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.pantry-item-details {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.pantry-item-delete {
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+  opacity: 0.5;
+}
+
+.pantry-item-delete:active {
+  opacity: 1;
+}
