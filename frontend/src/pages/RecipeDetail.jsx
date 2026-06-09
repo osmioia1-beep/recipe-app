@@ -1,67 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import supabase from '../supabase'
 import './RecipeDetail.css'
-
-const DEMO_RECIPES = {
-  1: {
-    id: 1,
-    title: 'Pasta Carbonara',
-    description: 'A autêntica carbonara italiana com ovos, queijo pecorino e guanciale. Sem natas!',
-    image_url: null,
-    prep_time: 20,
-    difficulty: 'medium',
-    category: 'Italiana',
-    servings: 4,
-    ingredients: [
-      { name: 'Spaghetti', quantity: '400g' },
-      { name: 'Guanciale (ou bacon)', quantity: '200g' },
-      { name: 'Gemas de ovo', quantity: '4' },
-      { name: 'Pecorino Romano', quantity: '100g' },
-      { name: 'Pimenta preta', quantity: 'q.b.' },
-    ],
-    steps: [
-      'Cozer a massa em água salgada abundante segundo as instruções da embalagem.',
-      'Cortar o guanciale em tiras e fritar numa frigideira sem óleo até ficar crocante.',
-      'Numa tigela, bater as gemas com o pecorino ralado e pimenta preta.',
-      'Quando a massa estiver al dente, escorrer e juntar ao guanciale.',
-      'Retirar do fogo e misturar a mistura de ovos, mexendo rapidamente.',
-      'Servir imediatamente com mais pecorino por cima.',
-    ],
-  },
-  2: {
-    id: 2,
-    title: 'Frango Assado com Batatas',
-    description: 'Frango inteiro assado no forno com batatas douradas e ervas aromáticas.',
-    image_url: null,
-    prep_time: 45,
-    difficulty: 'easy',
-    category: 'Carnes',
-    servings: 4,
-    ingredients: [
-      { name: 'Frango inteiro', quantity: '1.5kg' },
-      { name: 'Batatas', quantity: '800g' },
-      { name: 'Azeite', quantity: '4 colheres de sopa' },
-      { name: 'Alho', quantity: '4 dentes' },
-      { name: 'Alecrim', quantity: 'q.b.' },
-      { name: 'Sal e pimenta', quantity: 'q.b.' },
-    ],
-    steps: [
-      'Pré-aquecer o forno a 200°C.',
-      'Temperar o frango com sal, pimenta, alho picado e azeite.',
-      'Descascar e cortar as batatas em quartos.',
-      'Dispor as batatas numa assadeira, temperar com azeite e alecrim.',
-      'Colocar o frango por cima das batatas.',
-      'Assar durante 45-50 minutos até dourar.',
-      'Deixar repousar 5 minutos antes de servir.',
-    ],
-  },
-}
 
 export default function RecipeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [recipe, setRecipe] = useState(null)
+  const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     loadRecipe()
@@ -69,9 +17,26 @@ export default function RecipeDetail() {
 
   async function loadRecipe() {
     setLoading(true)
-    // In production: const { data } = await supabase.from('recipes').select('*').eq('id', id).single()
-    const data = DEMO_RECIPES[id]
-    setRecipe(data || null)
+    setError(null)
+    try {
+      const { data: recipeData, error: recipeError } = await supabase
+        .from('recipes')
+        .select('*')
+        .eq('id', id)
+        .single()
+      if (recipeError) throw recipeError
+      setRecipe(recipeData)
+
+      const { data: ingData, error: ingError } = await supabase
+        .from('recipe_ingredients')
+        .select('*')
+        .eq('recipe_id', id)
+        .order('id')
+      if (!ingError) setIngredients(ingData || [])
+    } catch (err) {
+      console.error('Failed to load recipe:', err)
+      setError('Erro ao carregar receita.')
+    }
     setLoading(false)
   }
 
@@ -92,8 +57,9 @@ export default function RecipeDetail() {
     )
   }
 
-  const difficultyLabel = { easy: 'Fácil', medium: 'Médio', hard: 'Difícil' }
-  const difficultyClass = { easy: 'badge-success', medium: 'badge-warning', hard: 'badge-danger' }
+  const difficultyNum = typeof recipe.difficulty === 'number' ? recipe.difficulty : 2
+  const difficultyLabel = difficultyNum <= 1 ? 'Fácil' : difficultyNum <= 3 ? 'Médio' : 'Difícil'
+  const difficultyClass = difficultyNum <= 1 ? 'badge-success' : difficultyNum <= 3 ? 'badge-warning' : 'badge-danger'
 
   return (
     <div className="recipe-detail">
@@ -101,10 +67,12 @@ export default function RecipeDetail() {
         {recipe.image_url ? (
           <img src={recipe.image_url} alt={recipe.title} className="detail-img" />
         ) : (
-          <div className="detail-img detail-placeholder">🍽️</div>
+          <div className="detail-img detail-placeholder">
+            <span className="placeholder-icon">🍳</span>
+            <span className="placeholder-text">{recipe.title}</span>
+          </div>
         )}
         <button className="btn-icon detail-back" onClick={() => navigate(-1)}>←</button>
-        <Link to={`/recipes/${id}/edit`} className="btn-icon detail-edit">✏️</Link>
       </div>
 
       <div className="detail-content">
@@ -112,19 +80,21 @@ export default function RecipeDetail() {
         {recipe.description && <p className="detail-desc">{recipe.description}</p>}
 
         <div className="detail-meta">
+          {(recipe.prep_time || recipe.cook_time || recipe.total_time) && (
+            <div className="detail-meta-item">
+              <span className="detail-meta-icon">⏱</span>
+              <span>{recipe.total_time || recipe.prep_time} min</span>
+            </div>
+          )}
           <div className="detail-meta-item">
-            <span className="detail-meta-icon">⏱</span>
-            <span>{recipe.prep_time} min</span>
+            <span className={`badge ${difficultyClass}`}>{difficultyLabel} {'★'.repeat(difficultyNum)}</span>
           </div>
-          <div className="detail-meta-item">
-            <span className={`badge ${difficultyClass[recipe.difficulty]}`}>
-              {difficultyLabel[recipe.difficulty]}
-            </span>
-          </div>
-          <div className="detail-meta-item">
-            <span className="detail-meta-icon">👥</span>
-            <span>{recipe.servings} porções</span>
-          </div>
+          {recipe.portions && (
+            <div className="detail-meta-item">
+              <span className="detail-meta-icon">👥</span>
+              <span>{recipe.portions} porções</span>
+            </div>
+          )}
           {recipe.category && (
             <div className="detail-meta-item">
               <span className="badge badge-info">{recipe.category}</span>
@@ -132,33 +102,51 @@ export default function RecipeDetail() {
           )}
         </div>
 
-        <div className="detail-section">
-          <h2 className="detail-section-title">Ingredientes</h2>
-          <ul className="detail-ingredients">
-            {recipe.ingredients.map((ing, i) => (
-              <li key={i} className="detail-ingredient">
-                <span className="detail-ingredient-qty">{ing.quantity}</span>
-                <span className="detail-ingredient-name">{ing.name}</span>
-              </li>
+        {recipe.tags && recipe.tags.length > 0 && (
+          <div className="detail-tags">
+            {recipe.tags.map((tag, i) => (
+              <span key={i} className="tag">#{tag}</span>
             ))}
-          </ul>
-        </div>
+          </div>
+        )}
 
         <div className="detail-section">
-          <h2 className="detail-section-title">Preparação</h2>
-          <ol className="detail-steps">
-            {recipe.steps.map((step, i) => (
-              <li key={i} className="detail-step">
-                <span className="detail-step-num">{i + 1}</span>
-                <span className="detail-step-text">{step}</span>
-              </li>
-            ))}
-          </ol>
+          <h2 className="detail-section-title">Ingredientes</h2>
+          {ingredients.length > 0 ? (
+            <ul className="detail-ingredients">
+              {ingredients.map((ing, i) => (
+                <li key={i} className="detail-ingredient">
+                  <span className="detail-ingredient-qty">
+                    {ing.quantity} {ing.unit}
+                  </span>
+                  <span className="detail-ingredient-name">
+                    {ing.optional ? '🔸 ' : ''}{ing.name}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted">Sem ingredientes listados.</p>
+          )}
         </div>
+
+        {recipe.steps && recipe.steps.length > 0 && (
+          <div className="detail-section">
+            <h2 className="detail-section-title">Preparação</h2>
+            <ol className="detail-steps">
+              {recipe.steps.map((step, i) => (
+                <li key={i} className="detail-step">
+                  <span className="detail-step-num">{i + 1}</span>
+                  <span className="detail-step-text">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
 
         <div className="detail-actions">
           <button className="btn btn-primary btn-block">📅 Adicionar ao planeamento</button>
-          <button className="btn btn-secondary btn-block">🛒 Ingredientes em falta → Lista de compras</button>
+          <button className="btn btn-secondary btn-block">🛒 Ingredientes em falta</button>
         </div>
       </div>
     </div>
