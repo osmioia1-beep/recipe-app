@@ -29,18 +29,15 @@ export default function Home() {
       if (recipesError) throw recipesError
       setRecipes(recipesData || [])
 
-      // Fetch pantry items if user is logged in
-      let pantry = []
-      if (user) {
-        const { data: pantryData, error: pantryError } = await supabase
-          .from('pantry_items')
-          .select('name')
-          .eq('user_id', user.id)
-        if (!pantryError && pantryData) {
-          pantry = pantryData.map(p => p.name.toLowerCase())
-        }
+      // Fetch pantry items from Supabase
+      const { data: pantryData, error: pantryError } = await supabase
+        .from('pantry_items')
+        .select('name')
+      if (!pantryError && pantryData) {
+        setPantryItems(pantryData.map(p => p.name.toLowerCase()))
+      } else {
+        setPantryItems([])
       }
-      setPantryItems(pantry)
 
       // Calculate matches
       const matched = (recipesData || []).map(recipe => {

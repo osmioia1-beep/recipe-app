@@ -1,18 +1,8 @@
 import { useState, useEffect } from 'react'
+import supabase from '../supabase'
 import './Pantry.css'
 
 const CATEGORIES = ['Frigorífico', 'Congelador', 'Despensa']
-
-const DEMO_ITEMS = [
-  { id: 1, name: 'Ovos', quantity: '12', category: 'Frigorífico', expiry: '2026-06-15' },
-  { id: 2, name: 'Leite', quantity: '1L', category: 'Frigorífico', expiry: '2026-06-10' },
-  { id: 3, name: 'Frango', quantity: '500g', category: 'Frigorífico', expiry: '2026-06-09' },
-  { id: 4, name: 'Massa', quantity: '500g', category: 'Despensa', expiry: '2027-01-01' },
-  { id: 5, name: 'Arroz', quantity: '1kg', category: 'Despensa', expiry: '2027-03-01' },
-  { id: 6, name: 'Azeite', quantity: '500ml', category: 'Despensa', expiry: '2026-12-01' },
-  { id: 7, name: 'Peixe congelado', quantity: '400g', category: 'Congelador', expiry: '2026-09-01' },
-  { id: 8, name: 'Legumes congelados', quantity: '300g', category: 'Congelador', expiry: '2026-08-01' },
-]
 
 function getExpiryStatus(expiry) {
   if (!expiry) return 'ok'
@@ -33,11 +23,31 @@ function getExpiryLabel(status) {
 }
 
 export default function Pantry() {
-  const [items, setItems] = useState(DEMO_ITEMS)
+  const [items, setItems] = useState([])
   const [activeCategory, setActiveCategory] = useState('Todas')
   const [showForm, setShowForm] = useState(false)
   const [newItem, setNewItem] = useState({ name: '', quantity: '', category: 'Despensa', expiry: '' })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadPantry()
+  }, [])
+
+  async function loadPantry() {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('pantry_items')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setItems(data || [])
+    } catch (err) {
+      console.error('Failed to load pantry:', err)
+    }
+    setLoading(false)
+  }
 
   const filtered = activeCategory === 'Todas'
     ? items
@@ -48,27 +58,54 @@ export default function Pantry() {
     return acc
   }, {})
 
-  function handleAdd(e) {
+  async function handleAdd(e) {
     e.preventDefault()
     if (!newItem.name.trim()) {
       setError('Nome é obrigatório.')
       return
     }
-    const item = {
-      id: Date.now(),
-      name: newItem.name.trim(),
-      quantity: newItem.quantity.trim(),
-      category: newItem.category,
-      expiry: newItem.expiry || null,
+    try {
+      const { data, error } = await supabase
+        .from('pantry_items')
+        .insert({
+          user_id: '00000000-0000-0000-0000-000000000000',
+          name: newItem.name.trim(),
+          quantity: newItem.quantity.trim() || null,
+          category: newItem.category,
+          expiry_date: newItem.expiry || null,
+        })
+        .select()
+        .single()
+      if (error) throw error
+      setItems(prev => [data, ...prev])
+      setNewItem({ name: '', quantity: '', category: 'Despensa', expiry: '' })
+      setShowForm(false)
+      setError('')
+    } catch (err) {
+      console.error('Failed to add item:', err)
+      setError('Erro ao adicionar item. Tenta novamente.')
     }
-    setItems(prev => [...prev, item])
-    setNewItem({ name: '', quantity: '', category: 'Despensa', expiry: '' })
-    setShowForm(false)
-    setError('')
   }
 
-  function handleDelete(id) {
-    setItems(prev => prev.filter(i => i.id !== id))
+  async function handleDelete(id) {
+    try {
+      const { error } = await supabase
+        .from('pantry_items')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+      setItems(prev => prev.filter(i => i.id !== id))
+    } catch (err) {
+      console.error('Failed to delete item:', err)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="home-loading">A carregar despensa...</div>
+      </div>
+    )
   }
 
   return (
@@ -162,7 +199,7 @@ export default function Pantry() {
       ) : (
         <div className="pantry-list">
           {filtered.map(item => {
-            const status = getExpiryStatus(item.expiry)
+            const status = getExpiryStatus(item.expiry_date)
             const expiryLabel = getExpiryLabel(status)
             return (
               <div key={item.id} className={`pantry-item pantry-item-${status}`}>
@@ -170,10 +207,11 @@ export default function Pantry() {
                   <div className="pantry-item-name">{item.name}</div>
                   <div className="pantry-item-details">
                     {item.quantity && <span>{item.quantity}</span>}
-                    <span className="badge badge-info">{item.category}</span>
-                    {item.expiry && (
+                    {item.unit && <span>{item.unit}</span>}
+                    {item.category && <span className="badge badge-info">{item.category}</span>}
+                    {item.expiry_date && (
                       <span className={`badge ${expiryLabel.class}`}>
-                        {expiryLabel.text} ({new Date(item.expiry).toLocaleDateString('pt-PT')})
+                        {expiryLabel.text} ({new Date(item.expiry_date).toLocaleDateString('pt-PT')})
                       </span>
                     )}
                   </div>
