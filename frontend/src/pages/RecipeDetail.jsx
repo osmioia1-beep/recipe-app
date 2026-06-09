@@ -4,6 +4,24 @@ import supabase from '../supabase'
 import { getFoodImageUrl } from '../utils/images'
 import './RecipeDetail.css'
 
+const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+const MEALS = [
+  { key: 'lunch', label: 'Almoço' },
+  { key: 'dinner', label: 'Jantar' },
+]
+
+function getNextWeekDates() {
+  const now = new Date()
+  const day = now.getDay()
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+  const monday = new Date(now.setDate(diff))
+  return DAYS.map((_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d
+  })
+}
+
 export default function RecipeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -11,6 +29,12 @@ export default function RecipeDetail() {
   const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showPlanModal, setShowPlanModal] = useState(false)
+  const [planDay, setPlanDay] = useState('')
+  const [planMeal, setPlanMeal] = useState('lunch')
+  const [planSaving, setPlanSaving] = useState(false)
+  const [planSuccess, setPlanSuccess] = useState(false)
+  const [weekDates] = useState(getNextWeekDates)
 
   useEffect(() => {
     loadRecipe()
@@ -39,6 +63,32 @@ export default function RecipeDetail() {
       setError('Erro ao carregar receita.')
     }
     setLoading(false)
+  }
+
+  async function handleAddToPlan() {
+    if (!planDay || !planMeal) return
+    setPlanSaving(true)
+    setPlanSuccess(false)
+    try {
+      const dayIndex = DAYS.indexOf(planDay)
+      const date = weekDates[dayIndex]
+      const dateStr = date.toISOString().split('T')[0]
+
+      const { error } = await supabase
+        .from('meal_plans')
+        .insert({
+          user_id: '00000000-0000-0000-0000-000000000000',
+          recipe_id: id,
+          date: dateStr,
+          meal_type: planMeal,
+        })
+      if (error) throw error
+      setPlanSuccess(true)
+      setTimeout(() => setShowPlanModal(false), 1200)
+    } catch (err) {
+      console.error('Failed to add to meal plan:', err)
+    }
+    setPlanSaving(false)
   }
 
   if (loading) {
@@ -148,10 +198,77 @@ export default function RecipeDetail() {
         )}
 
         <div className="detail-actions">
-          <button className="btn btn-primary btn-block">📅 Adicionar ao planeamento</button>
+          <button
+            className="btn btn-primary btn-block"
+            onClick={() => { setShowPlanModal(true); setPlanSuccess(false) }}
+          >
+            📅 Adicionar ao planeamento
+          </button>
           <button className="btn btn-secondary btn-block">🛒 Ingredientes em falta</button>
         </div>
       </div>
+
+      {/* Meal Plan Modal */}
+      {showPlanModal && (
+        <div className="mealplan-picker-overlay" onClick={() => setShowPlanModal(false)}>
+          <div className="mealplan-picker" onClick={e => e.stopPropagation()}>
+            <div className="mealplan-picker-header">
+              <h3>Adicionar ao planeamento</h3>
+              <button className="btn-icon" onClick={() => setShowPlanModal(false)}>✕</button>
+            </div>
+
+            {planSuccess ? (
+              <div className="plan-success">
+                <span className="plan-success-icon">✅</span>
+                <p>Receita adicionada!</p>
+              </div>
+            ) : (
+              <>
+                <div className="plan-form-group">
+                  <label>Dia da semana</label>
+                  <div className="plan-day-chips">
+                    {DAYS.map((day, i) => (
+                      <button
+                        key={day}
+                        className={`chip ${planDay === day ? 'active' : ''}`}
+                        onClick={() => setPlanDay(day)}
+                      >
+                        {day.slice(0, 3)}
+                        <span className="plan-date-hint">
+                          {weekDates[i]?.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="plan-form-group">
+                  <label>Refeição</label>
+                  <div className="plan-meal-chips">
+                    {MEALS.map(meal => (
+                      <button
+                        key={meal.key}
+                        className={`chip ${planMeal === meal.key ? 'active' : ''}`}
+                        onClick={() => setPlanMeal(meal.key)}
+                      >
+                        {meal.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  className="btn btn-primary btn-block"
+                  onClick={handleAddToPlan}
+                  disabled={!planDay || !planMeal || planSaving}
+                >
+                  {planSaving ? 'A guardar...' : 'Confirmar'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
