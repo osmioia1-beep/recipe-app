@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import supabase from '../supabase'
+import { getFoodImageUrl } from '../utils/images'
 import './RecipeDetail.css'
 
 export default function RecipeDetail() {
@@ -64,14 +65,16 @@ export default function RecipeDetail() {
   return (
     <div className="recipe-detail">
       <div className="detail-img-wrap">
-        {recipe.image_url ? (
-          <img src={recipe.image_url} alt={recipe.title} className="detail-img" />
-        ) : (
-          <div className="detail-img detail-placeholder">
-            <span className="placeholder-icon">🍳</span>
-            <span className="placeholder-text">{recipe.title}</span>
-          </div>
-        )}
+        <img
+          src={recipe.image_url || getFoodImageUrl(recipe.title, recipe.id)}
+          alt={recipe.title}
+          className="detail-img"
+          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }}
+        />
+        <div className="detail-img detail-placeholder" style={{ display: 'none' }}>
+          <span className="placeholder-icon">🍳</span>
+          <span className="placeholder-text">{recipe.title}</span>
+        </div>
         <button className="btn-icon detail-back" onClick={() => navigate(-1)}>←</button>
       </div>
 

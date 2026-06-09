@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { getFoodImageUrl } from '../utils/images'
 import './RecipeCard.css'
 
 const PALETTES = [
@@ -13,36 +15,33 @@ const PALETTES = [
 ]
 
 function getColor(id) {
-  const idx = Math.abs(id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % PALETTES.length
+  const idx = Math.abs((id || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % PALETTES.length
   return PALETTES[idx]
 }
 
 function getInitials(title) {
-  return title
-    .split(' ')
-    .filter(w => w.length > 2)
-    .slice(0, 2)
-    .map(w => w[0].toUpperCase())
-    .join('')
+  return title.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0].toUpperCase()).join('')
 }
 
 export default function RecipeCard({ recipe, matchStatus }) {
-  const { id, title, image_url, prep_time, difficulty, category, tags, portions } = recipe
-
-  const difficultyNum = typeof difficulty === 'number' ? difficulty : 2
-  const difficultyLabel = difficultyNum <= 1 ? 'Fácil' : difficultyNum <= 3 ? 'Médio' : 'Difícil'
-  const difficultyClass = difficultyNum <= 1 ? 'badge-success' : difficultyNum <= 3 ? 'badge-warning' : 'badge-danger'
+  const { id, title, prep_time, difficulty, category, tags } = recipe
+  const [imgError, setImgError] = useState(false)
   const [from, to] = getColor(id || title)
+  const imgSrc = getFoodImageUrl(title, id)
+
+  const diffNum = typeof difficulty === 'number' ? difficulty : 2
+  const diffLabel = diffNum <= 1 ? 'Fácil' : diffNum <= 3 ? 'Médio' : 'Difícil'
+  const diffClass = diffNum <= 1 ? 'badge-success' : diffNum <= 3 ? 'badge-warning' : 'badge-danger'
 
   return (
     <Link to={`/recipes/${id}`} className="recipe-card">
       <div className="recipe-card-img-wrap">
-        {image_url ? (
-          <img src={image_url} alt={title} className="recipe-card-img" loading="lazy" />
-        ) : (
+        {imgError ? (
           <div className="recipe-card-img recipe-card-placeholder" style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
             <span className="placeholder-initials">{getInitials(title)}</span>
           </div>
+        ) : (
+          <img src={imgSrc} alt={title} className="recipe-card-img" loading="lazy" onError={() => setImgError(true)} />
         )}
         {matchStatus && (
           <span className={`badge ${matchStatus.canMake ? 'badge-success' : 'badge-warning'} recipe-card-badge`}>
@@ -54,8 +53,8 @@ export default function RecipeCard({ recipe, matchStatus }) {
         <h3 className="recipe-card-title">{title}</h3>
         <div className="recipe-card-meta">
           {prep_time && <span>⏱ {prep_time} min</span>}
-          {difficulty !== null && difficulty !== undefined && (
-            <span className={`badge ${difficultyClass}`}>{difficultyLabel}</span>
+          {typeof difficulty === 'number' && (
+            <span className={`badge ${diffClass}`}>{diffLabel}</span>
           )}
         </div>
         {category && <span className="badge badge-info">{category}</span>}
