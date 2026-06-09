@@ -6,6 +6,7 @@ import './RecipeDetail.css'
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
 const MEALS = [
+  { key: 'breakfast', label: 'Pequeno-almoço' },
   { key: 'lunch', label: 'Almoço' },
   { key: 'dinner', label: 'Jantar' },
 ]

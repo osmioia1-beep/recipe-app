@@ -1,16 +1,12 @@
 import { useState, useEffect } from 'react'
+import supabase from '../supabase'
 import './MealPlan.css'
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-const MEALS = ['Pequeno-almoço', 'Almoço', 'Jantar']
-
-const DEMO_RECIPES = [
-  { id: 1, title: 'Pasta Carbonara', prep_time: 20 },
-  { id: 2, title: 'Frango Assado', prep_time: 45 },
-  { id: 3, title: 'Salada Mediterrânica', prep_time: 10 },
-  { id: 4, title: 'Arroz de Marisco', prep_time: 60 },
-  { id: 5, title: 'Tacos de Carne', prep_time: 30 },
-  { id: 6, title: 'Sopa de Legumes', prep_time: 25 },
+const MEALS = [
+  { key: 'breakfast', label: 'Pequeno-almoço' },
+  { key: 'lunch', label: 'Almoço' },
+  { key: 'dinner', label: 'Jantar' },
 ]
 
 function getWeekDates() {
@@ -26,42 +22,124 @@ function getWeekDates() {
 }
 
 export default function MealPlan() {
-  const [weekDates] = useState(getWeekDates())
-  const [plan, setPlan] = useState(() => {
-    const initial = {}
-    DAYS.forEach(day => {
-      initial[day] = { 'Pequeno-almoço': null, 'Almoço': null, 'Jantar': null }
-    })
-    // Demo: pre-fill some meals
-    initial['Segunda']['Almoço'] = DEMO_RECIPES[0]
-    initial['Segunda']['Jantar'] = DEMO_RECIPES[2]
-    initial['Terça']['Almoço'] = DEMO_RECIPES[1]
-    initial['Quarta']['Jantar'] = DEMO_RECIPES[4]
-    return initial
-  })
-  const [showPicker, setShowPicker] = useState(null) // { day, meal }
+  const [weekDates, setWeekDates] = useState(getWeekDates())
+  const [plan, setPlan] = useState({})
+  const [loading, setLoading] = useState(true)
   const [expandedDay, setExpandedDay] = useState(null)
 
-  function assignRecipe(day, meal, recipe) {
-    setPlan(prev => ({
-      ...prev,
-      [day]: { ...prev[day], [meal]: recipe },
-    }))
-    setShowPicker(null)
+  useEffect(() => {
+    loadPlan()
+  }, [])
+
+  async function loadPlan() {
+    setLoading(true)
+    try {
+      // Get week start (Monday)
+      const monday = weekDates[0]
+      const mondayStr = monday.toISOString().split('T')[0]
+
+      // Fetch meal plans from Supabase
+      const { data, error } = await supabase
+        .from('meal_plans')
+        .select(`
+          id,
+          date,
+          meal_type,
+          recipe:recipes(id, title, prep_time)
+        `)
+        .gte('date', mondayStr)
+        .lt('date', getEndDateStr(monday))
+
+      if (error) throw error
+
+      // Build plan structure
+      const initial = {}
+      DAYS.forEach((day, i) => {
+        initial[day] = {}
+        MEALS.forEach(meal => {
+          initial[day][meal.key] = null
+        })
+      })
+
+      // Fill in fetched data
+      const sortedDates = weekDates.map(d => d.toISOString().split('T')[0])
+      if (data) {
+        for (const mp of data) {
+          const dayIndex = sortedDates.indexOf(mp.date)
+          if (dayIndex !== -1 && mp.recipe) {
+            const dayName = DAYS[dayIndex]
+            initial[dayName][mp.meal_type] = {
+              id: mp.id,
+              title: mp.recipe.title,
+              prep_time: mp.recipe.prep_time,
+            }
+          }
+        }
+      }
+
+      setPlan(initial)
+    } catch (err) {
+      console.error('Failed to load meal plan:', err)
+    }
+    setLoading(false)
   }
 
-  function removeRecipe(day, meal) {
+  function getEndDateStr(monday) {
+    const end = new Date(monday)
+    end.setDate(end.getDate() + 7)
+    return end.toISOString().split('T')[0]
+  }
+
+  function removeRecipe(day, mealKey) {
+    const recipe = plan[day]?.[mealKey]
+    if (!recipe?.id) return
+
+    // Remove from Supabase in background
+    supabase
+      .from('meal_plans')
+      .delete()
+      .eq('id', recipe.id)
+      .then(({ error }) => {
+        if (error) console.error('Failed to remove:', error)
+      })
+
+    // Update UI immediately
     setPlan(prev => ({
       ...prev,
-      [day]: { ...prev[day], [meal]: null },
+      [day]: { ...prev[day], [mealKey]: null },
     }))
   }
 
   function clearDay(day) {
-    setPlan(prev => ({
-      ...prev,
-      [day]: { 'Pequeno-almoço': null, 'Almoço': null, 'Jantar': null },
-    }))
+    // Remove all recipes for this day from Supabase
+    const dayRecipes = plan[day] || {}
+    for (const mealKey of Object.keys(dayRecipes)) {
+      const recipe = dayRecipes[mealKey]
+      if (recipe?.id) {
+        supabase
+          .from('meal_plans')
+          .delete()
+          .eq('id', recipe.id)
+          .then(({ error }) => {
+            if (error) console.error('Failed to clear:', error)
+          })
+      }
+    }
+
+    // Update UI
+    const cleared = {}
+    MEALS.forEach(meal => {
+      cleared[meal.key] = null
+    })
+    setPlan(prev => ({ ...prev, [day]: cleared }))
+  }
+
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="home-loading">A carregar planeamento...</div>
+      </div>
+    )
   }
 
   return (
@@ -69,8 +147,13 @@ export default function MealPlan() {
       <div className="page-header">
         <div>
           <h1>Planeamento</h1>
-          <p className="subtitle">Semana de {weekDates[0]?.toLocaleDateString('pt-PT')} a {weekDates[6]?.toLocaleDateString('pt-PT')}</p>
+          <p className="subtitle">
+            Semana de {weekDates[0]?.toLocaleDateString('pt-PT')} a {weekDates[6]?.toLocaleDateString('pt-PT')}
+          </p>
         </div>
+        <button className="btn btn-sm btn-secondary" onClick={loadPlan}>
+          ↻
+        </button>
       </div>
 
       <div className="mealplan-week">
@@ -79,7 +162,7 @@ export default function MealPlan() {
           const isToday = date && date.toDateString() === new Date().toDateString()
           const isExpanded = expandedDay === day
           const dayMeals = plan[day] || {}
-          const filledCount = Object.values(dayMeals).filter(Boolean).length
+          const filledCount = MEALS.filter(m => dayMeals[m.key]?.title).length
 
           return (
             <div key={day} className={`mealplan-day ${isToday ? 'mealplan-day-today' : ''}`}>
@@ -95,7 +178,9 @@ export default function MealPlan() {
                 </div>
                 <div className="mealplan-day-count">
                   {filledCount > 0 && (
-                    <span className="badge badge-success">{filledCount} refeiç{filledCount > 1 ? 'ões' : 'ão'}</span>
+                    <span className="badge badge-success">
+                      {filledCount} refeiç{filledCount > 1 ? 'ões' : 'ão'}
+                    </span>
                   )}
                   <span className="mealplan-expand-icon">{isExpanded ? '▲' : '▼'}</span>
                 </div>
@@ -104,10 +189,10 @@ export default function MealPlan() {
               {isExpanded && (
                 <div className="mealplan-day-meals">
                   {MEALS.map(meal => {
-                    const recipe = dayMeals[meal]
+                    const recipe = dayMeals[meal.key]
                     return (
-                      <div key={meal} className="mealplan-meal">
-                        <div className="mealplan-meal-label">{meal}</div>
+                      <div key={meal.key} className="mealplan-meal">
+                        <div className="mealplan-meal-label">{meal.label}</div>
                         {recipe ? (
                           <div className="mealplan-meal-recipe">
                             <div className="mealplan-meal-info">
@@ -118,18 +203,13 @@ export default function MealPlan() {
                             </div>
                             <button
                               className="btn-icon mealplan-meal-remove"
-                              onClick={() => removeRecipe(day, meal)}
+                              onClick={() => removeRecipe(day, meal.key)}
                             >
                               ✕
                             </button>
                           </div>
                         ) : (
-                          <button
-                            className="mealplan-meal-add"
-                            onClick={() => setShowPicker({ day, meal })}
-                          >
-                            + Adicionar receita
-                          </button>
+                          <div className="mealplan-meal-empty">Sem refeição</div>
                         )}
                       </div>
                     )
@@ -145,30 +225,6 @@ export default function MealPlan() {
           )
         })}
       </div>
-
-      {/* Recipe picker modal */}
-      {showPicker && (
-        <div className="mealplan-picker-overlay" onClick={() => setShowPicker(null)}>
-          <div className="mealplan-picker" onClick={e => e.stopPropagation()}>
-            <div className="mealplan-picker-header">
-              <h3>Escolhe uma receita</h3>
-              <button className="btn-icon" onClick={() => setShowPicker(null)}>✕</button>
-            </div>
-            <div className="mealplan-picker-list">
-              {DEMO_RECIPES.map(recipe => (
-                <button
-                  key={recipe.id}
-                  className="mealplan-picker-item"
-                  onClick={() => assignRecipe(showPicker.day, showPicker.meal, recipe)}
-                >
-                  <span className="mealplan-picker-title">{recipe.title}</span>
-                  <span className="mealplan-picker-time">⏱ {recipe.prep_time} min</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
