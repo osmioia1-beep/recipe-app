@@ -1,33 +1,25 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import RecipeCard from '../components/RecipeCard'
+import supabase from '../supabase'
 import './Recipes.css'
 
-const CATEGORIES = ['Todas', 'Italiana', 'Carnes', 'Saladas', 'Peixe', 'Mexicana', 'Sopas', 'Sobremesas']
-const DIFFICULTIES = ['Todas', 'easy', 'medium', 'hard']
-const TIMES = [
-  { label: 'Todos', value: 0 },
-  { label: '< 15 min', value: 15 },
-  { label: '< 30 min', value: 30 },
-  { label: '< 1 hora', value: 60 },
-]
-
-const DEMO_RECIPES = [
-  { id: 1, title: 'Pasta Carbonara', prep_time: 20, difficulty: 'medium', category: 'Italiana', image_url: null },
-  { id: 2, title: 'Frango Assado com Batatas', prep_time: 45, difficulty: 'easy', category: 'Carnes', image_url: null },
-  { id: 3, title: 'Salada Mediterrânica', prep_time: 10, difficulty: 'easy', category: 'Saladas', image_url: null },
-  { id: 4, title: 'Arroz de Marisco', prep_time: 60, difficulty: 'hard', category: 'Peixe', image_url: null },
-  { id: 5, title: 'Tacos de Carne', prep_time: 30, difficulty: 'medium', category: 'Mexicana', image_url: null },
-  { id: 6, title: 'Sopa de Legumes', prep_time: 25, difficulty: 'easy', category: 'Sopas', image_url: null },
-]
+const CATEGORIES = ['Todas', 'Sobremesas', 'Pratos Principais', 'Sopas', 'Saladas', 'Pequeno-Almoço', 'Lanches']
+const DIFFICULTIES = ['Todas', '1', '2', '3', '4', '5']
 
 export default function Recipes() {
-  const [recipes, setRecipes] = useState(DEMO_RECIPES)
-  const [filtered, setFiltered] = useState(DEMO_RECIPES)
+  const [recipes, setRecipes] = useState([])
+  const [filtered, setFiltered] = useState([])
   const [category, setCategory] = useState('Todas')
   const [difficulty, setDifficulty] = useState('Todas')
-  const [maxTime, setMaxTime] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    loadRecipes()
+  }, [])
 
   useEffect(() => {
     let result = [...recipes]
@@ -35,21 +27,53 @@ export default function Recipes() {
       result = result.filter(r => r.category === category)
     }
     if (difficulty !== 'Todas') {
-      result = result.filter(r => r.difficulty === difficulty)
+      result = result.filter(r => r.difficulty === parseInt(difficulty))
     }
-    if (maxTime > 0) {
-      result = result.filter(r => r.prep_time <= maxTime)
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      result = result.filter(r =>
+        r.title.toLowerCase().includes(q) ||
+        (r.description && r.description.toLowerCase().includes(q)) ||
+        (r.tags && r.tags.some(t => t.toLowerCase().includes(q)))
+      )
     }
     setFiltered(result)
-  }, [category, difficulty, maxTime, recipes])
+  }, [category, difficulty, search, recipes])
+
+  async function loadRecipes() {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error } = await supabase
+        .from('recipes')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setRecipes(data || [])
+      setFiltered(data || [])
+    } catch (err) {
+      console.error('Failed to load recipes:', err)
+      setError('Erro ao carregar receitas. Tenta novamente.')
+    }
+    setLoading(false)
+  }
 
   return (
     <div className="page">
       <div className="page-header">
         <h1>Receitas</h1>
-        <button className="btn btn-sm btn-secondary" onClick={() => setShowFilters(!showFilters)}>
-          Filtros {showFilters ? '▲' : '▼'}
-        </button>
+        <div className="header-actions">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="🔍 Pesquisar..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          <button className="btn btn-sm btn-secondary" onClick={() => setShowFilters(!showFilters)}>
+            Filtros {showFilters ? '▲' : '▼'}
+          </button>
+        </div>
       </div>
 
       {showFilters && (
@@ -72,23 +96,13 @@ export default function Recipes() {
           <div className="filter-group">
             <label>Dificuldade</label>
             <div className="chip-group">
-              <button className={`chip ${difficulty === 'Todas' ? 'active' : ''}`} onClick={() => setDifficulty('Todas')}>Todas</button>
-              <button className={`chip ${difficulty === 'easy' ? 'active' : ''}`} onClick={() => setDifficulty('easy')}>Fácil</button>
-              <button className={`chip ${difficulty === 'medium' ? 'active' : ''}`} onClick={() => setDifficulty('medium')}>Médio</button>
-              <button className={`chip ${difficulty === 'hard' ? 'active' : ''}`} onClick={() => setDifficulty('hard')}>Difícil</button>
-            </div>
-          </div>
-
-          <div className="filter-group">
-            <label>Tempo</label>
-            <div className="chip-group">
-              {TIMES.map(t => (
+              {DIFFICULTIES.map(d => (
                 <button
-                  key={t.value}
-                  className={`chip ${maxTime === t.value ? 'active' : ''}`}
-                  onClick={() => setMaxTime(t.value)}
+                  key={d}
+                  className={`chip ${difficulty === d ? 'active' : ''}`}
+                  onClick={() => setDifficulty(d)}
                 >
-                  {t.label}
+                  {d === 'Todas' ? 'Todas' : '★'.repeat(parseInt(d))}
                 </button>
               ))}
             </div>
@@ -96,20 +110,34 @@ export default function Recipes() {
         </div>
       )}
 
-      <div className="recipes-count">{filtered.length} receita{filtered.length !== 1 ? 's' : ''}</div>
-
-      {filtered.length === 0 ? (
+      {loading ? (
         <div className="empty-state">
-          <div className="icon">🔍</div>
-          <h3>Nenhuma receita encontrada</h3>
-          <p>Tenta ajustar os filtros.</p>
+          <div className="icon">⏳</div>
+          <h3>A carregar receitas...</h3>
+        </div>
+      ) : error ? (
+        <div className="empty-state">
+          <div className="icon">⚠️</div>
+          <h3>{error}</h3>
+          <button className="btn btn-primary" onClick={loadRecipes}>Tentar novamente</button>
         </div>
       ) : (
-        <div className="grid grid-2">
-          {filtered.map(recipe => (
-            <RecipeCard key={recipe.id} recipe={recipe} />
-          ))}
-        </div>
+        <>
+          <div className="recipes-count">{filtered.length} receita{filtered.length !== 1 ? 's' : ''}</div>
+          {filtered.length === 0 ? (
+            <div className="empty-state">
+              <div className="icon">🔍</div>
+              <h3>Nenhuma receita encontrada</h3>
+              <p>Tenta ajustar os filtros.</p>
+            </div>
+          ) : (
+            <div className="grid grid-2">
+              {filtered.map(recipe => (
+                <RecipeCard key={recipe.id} recipe={recipe} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <Link to="/recipes/new" className="btn-fab" title="Nova receita">+</Link>

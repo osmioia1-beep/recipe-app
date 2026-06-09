@@ -2,60 +2,79 @@ import { useState, useEffect, useContext } from 'react'
 import { Link } from 'react-router-dom'
 import { AuthContext } from '../App'
 import RecipeCard from '../components/RecipeCard'
+import supabase from '../supabase'
 import './Home.css'
-
-// Demo data until backend is connected
-const DEMO_RECIPES = [
-  { id: 1, title: 'Pasta Carbonara', prep_time: 20, difficulty: 'medium', category: 'Italiana', image_url: null },
-  { id: 2, title: 'Frango Assado com Batatas', prep_time: 45, difficulty: 'easy', category: 'Carnes', image_url: null },
-  { id: 3, title: 'Salada Mediterrânica', prep_time: 10, difficulty: 'easy', category: 'Saladas', image_url: null },
-  { id: 4, title: 'Arroz de Marisco', prep_time: 60, difficulty: 'hard', category: 'Peixe', image_url: null },
-  { id: 5, title: 'Tacos de Carne', prep_time: 30, difficulty: 'medium', category: 'Mexicana', image_url: null },
-  { id: 6, title: 'Sopa de Legumes', prep_time: 25, difficulty: 'easy', category: 'Sopas', image_url: null },
-]
 
 export default function Home() {
   const { user } = useContext(AuthContext)
-  const [recipes, setRecipes] = useState(DEMO_RECIPES)
+  const [recipes, setRecipes] = useState([])
   const [pantryItems, setPantryItems] = useState([])
   const [matchedRecipes, setMatchedRecipes] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [user])
 
   async function loadData() {
     setLoading(true)
-    // In production, fetch from Supabase
-    // const { data: pantryData } = await supabase.from('pantry_items').select('*')
-    // For now use demo data
-    const demoPantry = ['massa', 'ovos', 'bacon', 'frango', 'batatas', 'azeite', 'sal', 'alho', 'cebola', 'arroz']
-    setPantryItems(demoPantry)
+    setError(null)
+    try {
+      // Fetch recipes from Supabase
+      const { data: recipesData, error: recipesError } = await supabase
+        .from('recipes')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (recipesError) throw recipesError
+      setRecipes(recipesData || [])
 
-    // Calculate matches
-    const matched = DEMO_RECIPES.map(recipe => {
-      const matchResult = checkMatch(recipe, demoPantry)
-      return { ...recipe, match: matchResult }
-    }).sort((a, b) => {
-      if (a.match.canMake && !b.match.canMake) return -1
-      if (!a.match.canMake && b.match.canMake) return 1
-      return a.match.missing - b.match.missing
-    })
+      // Fetch pantry items if user is logged in
+      let pantry = []
+      if (user) {
+        const { data: pantryData, error: pantryError } = await supabase
+          .from('pantry_items')
+          .select('name')
+          .eq('user_id', user.id)
+        if (!pantryError && pantryData) {
+          pantry = pantryData.map(p => p.name.toLowerCase())
+        }
+      }
+      setPantryItems(pantry)
 
-    setMatchedRecipes(matched)
+      // Calculate matches
+      const matched = (recipesData || []).map(recipe => {
+        const matchResult = checkMatch(recipe, pantry)
+        return { ...recipe, match: matchResult }
+      }).sort((a, b) => {
+        if (a.match.canMake && !b.match.canMake) return -1
+        if (!a.match.canMake && b.match.canMake) return 1
+        return a.match.missing - b.match.missing
+      })
+
+      setMatchedRecipes(matched)
+    } catch (err) {
+      console.error('Failed to load data:', err)
+      setError('Erro ao carregar dados. Tenta novamente.')
+    }
     setLoading(false)
   }
 
   function checkMatch(recipe, pantry) {
-    // Simple demo matching
-    const keywords = recipe.title.toLowerCase().split(' ')
+    if (!pantry.length) return { canMake: false, missing: 0, total: 0 }
+    const keywords = [
+      ...recipe.title.toLowerCase().split(' '),
+      ...(recipe.tags || []).map(t => t.toLowerCase())
+    ]
     let missing = 0
+    let total = 0
     for (const word of keywords) {
+      if (word.length <= 2) continue
+      total++
       const has = pantry.some(p => p.includes(word) || word.includes(p))
-      if (!has && word.length > 2) missing++
+      if (!has) missing++
     }
-    return { canMake: missing <= 1, missing }
+    return { canMake: missing === 0 && total > 0, missing, total }
   }
 
   return (
@@ -76,29 +95,28 @@ export default function Home() {
 
       {loading ? (
         <div className="home-loading">A procurar receitas...</div>
+      ) : error ? (
+        <div className="empty-state">
+          <div className="icon">⚠️</div>
+          <h3>{error}</h3>
+          <button className="btn btn-primary" onClick={loadData}>Tentar novamente</button>
+        </div>
       ) : (
         <>
           <h2 className="home-section-title">
-            Receitas que podes fazer
-            <span className="badge badge-success">{matchedRecipes.filter(r => r.match.canMake).length}</span>
+            Todas as receitas
+            <span className="badge badge-success">{recipes.length}</span>
           </h2>
           <div className="grid grid-2">
-            {matchedRecipes.filter(r => r.match.canMake).map(recipe => (
-              <RecipeCard key={recipe.id} recipe={recipe} matchStatus={recipe.match} />
+            {recipes.slice(0, 6).map(recipe => (
+              <RecipeCard key={recipe.id} recipe={recipe} />
             ))}
           </div>
 
-          {matchedRecipes.filter(r => !r.match.canMake).length > 0 && (
-            <>
-              <h2 className="home-section-title home-section-alt">
-                Quase lá!
-              </h2>
-              <div className="grid grid-2">
-                {matchedRecipes.filter(r => !r.match.canMake).map(recipe => (
-                  <RecipeCard key={recipe.id} recipe={recipe} matchStatus={recipe.match} />
-                ))}
-              </div>
-            </>
+          {recipes.length > 6 && (
+            <div className="home-see-all">
+              <Link to="/recipes" className="btn btn-secondary">Ver todas as receitas →</Link>
+            </div>
           )}
         </>
       )}
