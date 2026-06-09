@@ -1,0 +1,42 @@
+services:
+  # ─── Backend API (Web Service) ─────────────────────────────────────
+  - type: web
+    name: recipe-app-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: SUPABASE_URL
+        value: https://lfatskduuzwdqoomtphh.supabase.co
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+    autoDeploy: true
+
+  # ─── Frontend (Static Site) ─────────────────────────────────────────
+  - type: static
+    name: recipe-app
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    publishDir: dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        value: https://lfatskduuzwdqoomtphh.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    autoDeploy: true
