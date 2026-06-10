@@ -309,6 +309,11 @@
   color: var(--text-light, #888);
 }
 
+.plan-day-arrow {
+  font-size: 1.125rem;
+  color: var(--text-light, #888);
+}
+
 /* Meal list */
 .plan-meal-list {
   display: flex;

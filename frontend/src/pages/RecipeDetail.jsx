@@ -7,6 +7,28 @@ import './RecipeDetail.css'
 
 const DUMMY_USER = '00000000-0000-0000-0000-000000000000'
 
+const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+const MEALS = [
+  { key: 'lunch', label: '🍽️ Almoço' },
+  { key: 'dinner', label: '🌙 Jantar' },
+]
+
+function getWeekDates() {
+  const now = new Date()
+  const day = now.getDay()
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+  const monday = new Date(now.setDate(diff))
+  return DAYS.map((_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d
+  })
+}
+
+function formatDate(date) {
+  return date.toISOString().split('T')[0]
+}
+
 export default function RecipeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -18,6 +40,13 @@ export default function RecipeDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Meal plan picker state
+  const [showPicker, setShowPicker] = useState(false)
+  const [pickerStep, setPickerStep] = useState('day') // 'day' | 'meal' | 'success'
+  const [selectedDay, setSelectedDay] = useState(null)
+  const [selectedDate, setSelectedDate] = useState(null)
+  const [saving, setSaving] = useState(false)
+
   useEffect(() => {
     loadRecipe()
     loadPantry()
@@ -25,7 +54,6 @@ export default function RecipeDetail() {
 
   async function loadPantry() {
     try {
-      // Try logged-in user first, then fall back to dummy user
       const userId = user?.id || DUMMY_USER
       const { data, error } = await supabase
         .from('pantry_items')
@@ -71,6 +99,52 @@ export default function RecipeDetail() {
     setLoading(false)
   }
 
+  function openPicker() {
+    setShowPicker(true)
+    setPickerStep('day')
+    setSelectedDay(null)
+    setSelectedDate(null)
+  }
+
+  function closePicker() {
+    setShowPicker(false)
+    setPickerStep('day')
+    setSelectedDay(null)
+    setSelectedDate(null)
+  }
+
+  function selectDay(dayIndex) {
+    const dates = getWeekDates()
+    setSelectedDay(DAYS[dayIndex])
+    setSelectedDate(formatDate(dates[dayIndex]))
+    setPickerStep('meal')
+  }
+
+  async function selectMeal(mealType) {
+    setSaving(true)
+    try {
+      const userId = user?.id || DUMMY_USER
+      const { error } = await supabase
+        .from('meal_plans')
+        .insert({
+          user_id: userId,
+          recipe_id: recipe.id,
+          date: selectedDate,
+          meal_type: mealType,
+        })
+      if (error) throw error
+      setPickerStep('success')
+      setTimeout(() => {
+        closePicker()
+      }, 1500)
+    } catch (err) {
+      console.error('Failed to add to meal plan:', err)
+      setError('Erro ao adicionar ao planeamento.')
+      closePicker()
+    }
+    setSaving(false)
+  }
+
   if (loading) {
     return <div className="page"><div className="detail-loading">A carregar...</div></div>
   }
@@ -96,6 +170,8 @@ export default function RecipeDetail() {
   const totalIngredients = ingredients.length
   const allAvailable = availableCount === totalIngredients && totalIngredients > 0
   const hasPantry = pantryItems.length > 0 && pantryLoaded
+
+  const weekDates = getWeekDates()
 
   return (
     <div className="recipe-detail">
@@ -202,10 +278,76 @@ export default function RecipeDetail() {
         )}
 
         <div className="detail-actions">
-          <button className="btn btn-primary btn-block">📅 Adicionar ao planeamento</button>
+          <button className="btn btn-primary btn-block" onClick={openPicker}>📅 Adicionar ao planeamento</button>
           <button className="btn btn-secondary btn-block">🛒 Ingredientes em falta</button>
         </div>
       </div>
+
+      {/* Meal Plan Picker Modal */}
+      {showPicker && (
+        <div className="mealplan-picker-overlay" onClick={(e) => { if (e.target === e.currentTarget) closePicker() }}>
+          <div className="mealplan-picker">
+            {pickerStep === 'day' && (
+              <>
+                <div className="mealplan-picker-header">
+                  <h3>Escolhe o dia</h3>
+                  <button className="btn-icon" onClick={closePicker}>✕</button>
+                </div>
+                <div className="plan-day-list">
+                  {DAYS.map((day, i) => {
+                    const date = weekDates[i]
+                    const isToday = date.toDateString() === new Date().toDateString()
+                    return (
+                      <button key={day} className="plan-day-item" onClick={() => selectDay(i)}>
+                        <div>
+                          <span className="plan-day-name">{day}</span>
+                          <span className="plan-day-date">
+                            {date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
+                            {isToday && ' (hoje)'}
+                          </span>
+                        </div>
+                        <span className="plan-day-arrow">→</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
+            {pickerStep === 'meal' && (
+              <>
+                <div className="mealplan-picker-header">
+                  <button className="plan-back-btn" onClick={() => setPickerStep('day')}>← Voltar</button>
+                  <h3>{selectedDay}</h3>
+                  <button className="btn-icon" onClick={closePicker}>✕</button>
+                </div>
+                <p className="plan-selected-day">
+                  {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </p>
+                <div className="plan-meal-list">
+                  {MEALS.map(meal => (
+                    <button key={meal.key} className="plan-meal-item" onClick={() => selectMeal(meal.key)} disabled={saving}>
+                      <span className="plan-meal-label">{meal.label}</span>
+                      <span className="plan-meal-arrow">→</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {pickerStep === 'success' && (
+              <div className="mealplan-picker-header">
+                <h3>✅ Sucesso!</h3>
+                <button className="btn-icon" onClick={closePicker}>✕</button>
+              </div>
+              <div className="plan-success">
+                <span className="plan-success-icon">🎉</span>
+                <p>Receita adicionada ao planeamento!</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
