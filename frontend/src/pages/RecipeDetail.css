@@ -128,8 +128,18 @@
 
 .detail-ingredient-status {
   flex-shrink: 0;
-  width: 24px;
-  font-size: 0.85rem;
+  width: 28px;
+  font-size: 1rem;
+  text-align: center;
+  display: inline-block;
+}
+
+.ingredient-available {
+  background: rgba(76, 175, 80, 0.06);
+}
+
+.ingredient-missing {
+  background: rgba(231, 76, 60, 0.04);
 }
 
 .ingredient-available .detail-ingredient-name {
@@ -144,6 +154,16 @@
   font-size: 0.75rem;
   color: var(--text-muted);
   font-style: italic;
+}
+
+.pantry-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
 }
 
 .detail-ingredient-qty {

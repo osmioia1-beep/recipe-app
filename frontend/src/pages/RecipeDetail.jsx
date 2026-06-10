@@ -5,6 +5,8 @@ import supabase from '../supabase'
 import { getFoodImageUrl } from '../utils/images'
 import './RecipeDetail.css'
 
+const DUMMY_USER = '00000000-0000-0000-0000-000000000000'
+
 export default function RecipeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -12,26 +14,30 @@ export default function RecipeDetail() {
   const [recipe, setRecipe] = useState(null)
   const [ingredients, setIngredients] = useState([])
   const [pantryItems, setPantryItems] = useState([])
+  const [pantryLoaded, setPantryLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     loadRecipe()
-    if (user) loadPantry()
+    loadPantry()
   }, [id, user])
 
   async function loadPantry() {
     try {
+      // Try logged-in user first, then fall back to dummy user
+      const userId = user?.id || DUMMY_USER
       const { data, error } = await supabase
         .from('pantry_items')
         .select('name')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
       if (!error && data) {
         setPantryItems(data.map(p => p.name.toLowerCase().trim()))
       }
     } catch (e) {
       console.warn('Pantry load failed:', e.message)
     }
+    setPantryLoaded(true)
   }
 
   function checkIngredientAvailability(ingName) {
@@ -86,9 +92,10 @@ export default function RecipeDetail() {
   const difficultyLabel = difficultyNum <= 1 ? 'Fácil' : difficultyNum <= 3 ? 'Médio' : 'Difícil'
   const difficultyClass = difficultyNum <= 1 ? 'badge-success' : difficultyNum <= 3 ? 'badge-warning' : 'badge-danger'
 
-  const availableCount = ingredients.filter(i => checkIngredientAvailability(i.name)).length
+  const availableCount = ingredients.filter(i => checkIngredientAvailability(i.name) === true).length
   const totalIngredients = ingredients.length
   const allAvailable = availableCount === totalIngredients && totalIngredients > 0
+  const hasPantry = pantryItems.length > 0 && pantryLoaded
 
   return (
     <div className="recipe-detail">
@@ -145,8 +152,8 @@ export default function RecipeDetail() {
         {/* Ingredients with availability */}
         <div className="detail-section">
           <div className="detail-section-header">
-            <h2 className="detail-section-title">Ingredientes</h2>
-            {pantryItems.length > 0 && (
+            <h2 className="detail-section-title">🧄 Ingredientes</h2>
+            {hasPantry && (
               <span className={`badge ${allAvailable ? 'badge-success' : 'badge-warning'}`}>
                 {allAvailable ? '✅ Tens tudo!' : `${availableCount}/${totalIngredients} disponíveis`}
               </span>
@@ -156,16 +163,17 @@ export default function RecipeDetail() {
             <ul className="detail-ingredients">
               {ingredients.map((ing, i) => {
                 const available = checkIngredientAvailability(ing.name)
+                const rowClass = available === true ? 'ingredient-available' : available === false ? 'ingredient-missing' : ''
+                const statusIcon = available === true ? '✅' : available === false ? '❌' : '❓'
                 return (
-                  <li key={i} className={`detail-ingredient ${available === true ? 'ingredient-available' : available === false ? 'ingredient-missing' : ''}`}>
-                    <span className="detail-ingredient-status">
-                      {available === true ? '✅' : available === false ? '❌' : ''}
-                    </span>
+                  <li key={i} className={`detail-ingredient ${rowClass}`}>
+                    <span className="detail-ingredient-status">{statusIcon}</span>
                     <span className="detail-ingredient-qty">
                       {ing.quantity} {ing.unit}
                     </span>
                     <span className="detail-ingredient-name">
-                      {ing.optional ? <span className="ingredient-optional">🔸 opcional</span> : ''} {ing.name}
+                      {ing.optional && <span className="ingredient-optional">opcional </span>}
+                      {ing.name}
                     </span>
                   </li>
                 )
@@ -174,11 +182,14 @@ export default function RecipeDetail() {
           ) : (
             <p className="text-muted">Sem ingredientes listados.</p>
           )}
+          {!hasPantry && (
+            <p className="pantry-hint">💡 Adiciona itens à tua despensa para veres o que tens disponível.</p>
+          )}
         </div>
 
         {recipe.steps && recipe.steps.length > 0 && (
           <div className="detail-section">
-            <h2 className="detail-section-title">Preparação</h2>
+            <h2 className="detail-section-title">📋 Preparação</h2>
             <ol className="detail-steps">
               {recipe.steps.map((step, i) => (
                 <li key={i} className="detail-step">
