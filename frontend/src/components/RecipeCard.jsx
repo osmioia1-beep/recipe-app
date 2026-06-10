@@ -52,7 +52,7 @@ export default function RecipeCard({ recipe, matchStatus }) {
       <div className="recipe-card-body">
         <h3 className="recipe-card-title">{title}</h3>
         <div className="recipe-card-meta">
-          {prep_time && <span>⏱ {prep_time} min</span>}
+          {prep_time && <span>⏱ {prep_time + (recipe.cook_time || 0)} min</span>}
           {typeof difficulty === 'number' && (
             <span className={`badge ${diffClass}`}>{diffLabel}</span>
           )}
@@ -61,7 +61,7 @@ export default function RecipeCard({ recipe, matchStatus }) {
         {tags && tags.length > 0 && (
           <div className="recipe-card-tags">
             {tags.slice(0, 3).map((tag, i) => (
-              <span key={i} className="tag-mini">{tag}</span>
+              <span key={i} className="tag-mini">#{tag}</span>
             ))}
           </div>
         )}

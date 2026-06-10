@@ -54,3 +54,9 @@
   color: var(--text-light);
   font-size: 1rem;
 }
+
+.home-see-all {
+  text-align: center;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
