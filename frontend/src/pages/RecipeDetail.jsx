@@ -287,64 +287,68 @@ export default function RecipeDetail() {
       {showPicker && (
         <div className="mealplan-picker-overlay" onClick={(e) => { if (e.target === e.currentTarget) closePicker() }}>
           <div className="mealplan-picker">
-            {pickerStep === 'day' && (
-              <>
-                <div className="mealplan-picker-header">
-                  <h3>Escolhe o dia</h3>
-                  <button className="btn-icon" onClick={closePicker}>✕</button>
-                </div>
-                <div className="plan-day-list">
-                  {DAYS.map((day, i) => {
-                    const date = weekDates[i]
-                    const isToday = date.toDateString() === new Date().toDateString()
-                    return (
-                      <button key={day} className="plan-day-item" onClick={() => selectDay(i)}>
-                        <div>
-                          <span className="plan-day-name">{day}</span>
-                          <span className="plan-day-date">
-                            {date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
-                            {isToday && ' (hoje)'}
-                          </span>
-                        </div>
-                        <span className="plan-day-arrow">→</span>
+            <>
+              {pickerStep === 'day' && (
+                <>
+                  <div className="mealplan-picker-header">
+                    <h3>Escolhe o dia</h3>
+                    <button className="btn-icon" onClick={closePicker}>✕</button>
+                  </div>
+                  <div className="plan-day-list">
+                    {DAYS.map((day, i) => {
+                      const date = weekDates[i]
+                      const isToday = date.toDateString() === new Date().toDateString()
+                      return (
+                        <button key={day} className="plan-day-item" onClick={() => selectDay(i)}>
+                          <div>
+                            <span className="plan-day-name">{day}</span>
+                            <span className="plan-day-date">
+                              {date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
+                              {isToday && ' (hoje)'}
+                            </span>
+                          </div>
+                          <span className="plan-day-arrow">→</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {pickerStep === 'meal' && (
+                <>
+                  <div className="mealplan-picker-header">
+                    <button className="plan-back-btn" onClick={() => setPickerStep('day')}>← Voltar</button>
+                    <h3>{selectedDay}</h3>
+                    <button className="btn-icon" onClick={closePicker}>✕</button>
+                  </div>
+                  <p className="plan-selected-day">
+                    {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </p>
+                  <div className="plan-meal-list">
+                    {MEALS.map(meal => (
+                      <button key={meal.key} className="plan-meal-item" onClick={() => selectMeal(meal.key)} disabled={saving}>
+                        <span className="plan-meal-label">{meal.label}</span>
+                        <span className="plan-meal-arrow">→</span>
                       </button>
-                    )
-                  })}
-                </div>
-              </>
-            )}
+                    ))}
+                  </div>
+                </>
+              )}
 
-            {pickerStep === 'meal' && (
-              <>
-                <div className="mealplan-picker-header">
-                  <button className="plan-back-btn" onClick={() => setPickerStep('day')}>← Voltar</button>
-                  <h3>{selectedDay}</h3>
-                  <button className="btn-icon" onClick={closePicker}>✕</button>
-                </div>
-                <p className="plan-selected-day">
-                  {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })}
-                </p>
-                <div className="plan-meal-list">
-                  {MEALS.map(meal => (
-                    <button key={meal.key} className="plan-meal-item" onClick={() => selectMeal(meal.key)} disabled={saving}>
-                      <span className="plan-meal-label">{meal.label}</span>
-                      <span className="plan-meal-arrow">→</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {pickerStep === 'success' && (
-              <div className="mealplan-picker-header">
-                <h3>✅ Sucesso!</h3>
-                <button className="btn-icon" onClick={closePicker}>✕</button>
-              </div>
-              <div className="plan-success">
-                <span className="plan-success-icon">🎉</span>
-                <p>Receita adicionada ao planeamento!</p>
-              </div>
-            )}
+              {pickerStep === 'success' && (
+                <>
+                  <div className="mealplan-picker-header">
+                    <h3>✅ Sucesso!</h3>
+                    <button className="btn-icon" onClick={closePicker}>✕</button>
+                  </div>
+                  <div className="plan-success">
+                    <span className="plan-success-icon">🎉</span>
+                    <p>Receita adicionada ao planeamento!</p>
+                  </div>
+                </>
+              )}
+            </>
           </div>
         </div>
       )}
