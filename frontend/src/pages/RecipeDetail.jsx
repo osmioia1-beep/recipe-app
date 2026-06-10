@@ -1,45 +1,44 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { AuthContext } from '../App'
 import supabase from '../supabase'
 import { getFoodImageUrl } from '../utils/images'
 import './RecipeDetail.css'
 
-const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-const MEALS = [
-  { key: 'breakfast', label: 'Pequeno-almoço' },
-  { key: 'lunch', label: 'Almoço' },
-  { key: 'dinner', label: 'Jantar' },
-]
-
-function getNextWeekDates() {
-  const now = new Date()
-  const day = now.getDay()
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1)
-  const monday = new Date(now.setDate(diff))
-  return DAYS.map((_, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    return d
-  })
-}
-
 export default function RecipeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useContext(AuthContext)
   const [recipe, setRecipe] = useState(null)
   const [ingredients, setIngredients] = useState([])
+  const [pantryItems, setPantryItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showPlanModal, setShowPlanModal] = useState(false)
-  const [planDay, setPlanDay] = useState('')
-  const [planMeal, setPlanMeal] = useState('lunch')
-  const [planSaving, setPlanSaving] = useState(false)
-  const [planSuccess, setPlanSuccess] = useState(false)
-  const [weekDates] = useState(getNextWeekDates)
 
   useEffect(() => {
     loadRecipe()
-  }, [id])
+    if (user) loadPantry()
+  }, [id, user])
+
+  async function loadPantry() {
+    try {
+      const { data, error } = await supabase
+        .from('pantry_items')
+        .select('name')
+        .eq('user_id', user.id)
+      if (!error && data) {
+        setPantryItems(data.map(p => p.name.toLowerCase().trim()))
+      }
+    } catch (e) {
+      console.warn('Pantry load failed:', e.message)
+    }
+  }
+
+  function checkIngredientAvailability(ingName) {
+    if (!pantryItems.length) return null
+    const name = ingName.toLowerCase().trim()
+    return pantryItems.some(p => p.includes(name) || name.includes(p))
+  }
 
   async function loadRecipe() {
     setLoading(true)
@@ -66,32 +65,6 @@ export default function RecipeDetail() {
     setLoading(false)
   }
 
-  async function handleAddToPlan() {
-    if (!planDay || !planMeal) return
-    setPlanSaving(true)
-    setPlanSuccess(false)
-    try {
-      const dayIndex = DAYS.indexOf(planDay)
-      const date = weekDates[dayIndex]
-      const dateStr = date.toISOString().split('T')[0]
-
-      const { error } = await supabase
-        .from('meal_plans')
-        .insert({
-          user_id: '00000000-0000-0000-0000-000000000000',
-          recipe_id: id,
-          date: dateStr,
-          meal_type: planMeal,
-        })
-      if (error) throw error
-      setPlanSuccess(true)
-      setTimeout(() => setShowPlanModal(false), 1200)
-    } catch (err) {
-      console.error('Failed to add to meal plan:', err)
-    }
-    setPlanSaving(false)
-  }
-
   if (loading) {
     return <div className="page"><div className="detail-loading">A carregar...</div></div>
   }
@@ -113,6 +86,10 @@ export default function RecipeDetail() {
   const difficultyLabel = difficultyNum <= 1 ? 'Fácil' : difficultyNum <= 3 ? 'Médio' : 'Difícil'
   const difficultyClass = difficultyNum <= 1 ? 'badge-success' : difficultyNum <= 3 ? 'badge-warning' : 'badge-danger'
 
+  const availableCount = ingredients.filter(i => checkIngredientAvailability(i.name)).length
+  const totalIngredients = ingredients.length
+  const allAvailable = availableCount === totalIngredients && totalIngredients > 0
+
   return (
     <div className="recipe-detail">
       <div className="detail-img-wrap">
@@ -127,6 +104,7 @@ export default function RecipeDetail() {
           <span className="placeholder-text">{recipe.title}</span>
         </div>
         <button className="btn-icon detail-back" onClick={() => navigate(-1)}>←</button>
+        <Link to={`/recipes/${id}/edit`} className="btn-icon detail-edit" title="Editar receita">✏️</Link>
       </div>
 
       <div className="detail-content">
@@ -137,7 +115,7 @@ export default function RecipeDetail() {
           {(recipe.prep_time || recipe.cook_time || recipe.total_time) && (
             <div className="detail-meta-item">
               <span className="detail-meta-icon">⏱</span>
-              <span>{recipe.total_time || recipe.prep_time} min</span>
+              <span>{recipe.total_time || (recipe.prep_time + (recipe.cook_time || 0))} min</span>
             </div>
           )}
           <div className="detail-meta-item">
@@ -164,20 +142,34 @@ export default function RecipeDetail() {
           </div>
         )}
 
+        {/* Ingredients with availability */}
         <div className="detail-section">
-          <h2 className="detail-section-title">Ingredientes</h2>
+          <div className="detail-section-header">
+            <h2 className="detail-section-title">Ingredientes</h2>
+            {pantryItems.length > 0 && (
+              <span className={`badge ${allAvailable ? 'badge-success' : 'badge-warning'}`}>
+                {allAvailable ? '✅ Tens tudo!' : `${availableCount}/${totalIngredients} disponíveis`}
+              </span>
+            )}
+          </div>
           {ingredients.length > 0 ? (
             <ul className="detail-ingredients">
-              {ingredients.map((ing, i) => (
-                <li key={i} className="detail-ingredient">
-                  <span className="detail-ingredient-qty">
-                    {ing.quantity} {ing.unit}
-                  </span>
-                  <span className="detail-ingredient-name">
-                    {ing.optional ? '🔸 ' : ''}{ing.name}
-                  </span>
-                </li>
-              ))}
+              {ingredients.map((ing, i) => {
+                const available = checkIngredientAvailability(ing.name)
+                return (
+                  <li key={i} className={`detail-ingredient ${available === true ? 'ingredient-available' : available === false ? 'ingredient-missing' : ''}`}>
+                    <span className="detail-ingredient-status">
+                      {available === true ? '✅' : available === false ? '❌' : ''}
+                    </span>
+                    <span className="detail-ingredient-qty">
+                      {ing.quantity} {ing.unit}
+                    </span>
+                    <span className="detail-ingredient-name">
+                      {ing.optional ? <span className="ingredient-optional">🔸 opcional</span> : ''} {ing.name}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           ) : (
             <p className="text-muted">Sem ingredientes listados.</p>
@@ -199,92 +191,10 @@ export default function RecipeDetail() {
         )}
 
         <div className="detail-actions">
-          <button
-            className="btn btn-primary btn-block"
-            onClick={() => { setShowPlanModal(true); setPlanSuccess(false) }}
-          >
-            📅 Adicionar ao planeamento
-          </button>
+          <button className="btn btn-primary btn-block">📅 Adicionar ao planeamento</button>
           <button className="btn btn-secondary btn-block">🛒 Ingredientes em falta</button>
         </div>
       </div>
-
-      {/* Meal Plan Modal */}
-      {showPlanModal && (
-        <div className="mealplan-picker-overlay" onClick={() => setShowPlanModal(false)}>
-          <div className="mealplan-picker" onClick={e => e.stopPropagation()}>
-            <div className="mealplan-picker-header">
-              <h3>Adicionar ao planeamento</h3>
-              <button className="btn-icon" onClick={() => setShowPlanModal(false)}>✕</button>
-            </div>
-
-            {planSuccess ? (
-              <div className="plan-success">
-                <span className="plan-success-icon">✅</span>
-                <p>Receita adicionada!</p>
-              </div>
-            ) : !planDay ? (
-              /* Step 1: Choose day */
-              <div className="plan-day-list">
-                {DAYS.map((day, i) => (
-                  <button
-                    key={day}
-                    className="plan-day-item"
-                    onClick={() => setPlanDay(day)}
-                  >
-                    <span className="plan-day-name">{day}</span>
-                    <span className="plan-day-date">
-                      {weekDates[i]?.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              /* Step 2: Choose meal */
-              <div className="plan-meal-list">
-                <button className="plan-back-btn" onClick={() => setPlanDay('')}>← Voltar</button>
-                <p className="plan-selected-day">
-                  {planDay}, {weekDates[DAYS.indexOf(planDay)]?.toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}
-                </p>
-                {MEALS.map(meal => (
-                  <button
-                    key={meal.key}
-                    className="plan-meal-item"
-                    onClick={async () => {
-                      setPlanMeal(meal.key)
-                      setPlanSaving(true)
-                      setPlanSuccess(false)
-                      try {
-                        const dayIndex = DAYS.indexOf(planDay)
-                        const date = weekDates[dayIndex]
-                        const dateStr = date.toISOString().split('T')[0]
-                        const { error } = await supabase
-                          .from('meal_plans')
-                          .insert({
-                            user_id: '00000000-0000-0000-0000-000000000000',
-                            recipe_id: id,
-                            date: dateStr,
-                            meal_type: meal.key,
-                          })
-                        if (error) throw error
-                        setPlanSuccess(true)
-                        setTimeout(() => setShowPlanModal(false), 1200)
-                      } catch (err) {
-                        console.error('Failed to add to meal plan:', err)
-                      }
-                      setPlanSaving(false)
-                    }}
-                    disabled={planSaving}
-                  >
-                    <span className="plan-meal-label">{meal.label}</span>
-                    <span className="plan-meal-arrow">→</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import supabase from './supabase'
 import NavBar from './components/NavBar'
 import Home from './pages/Home'
@@ -46,7 +46,7 @@ function App() {
 
   return (
     <AuthContext.Provider value={{ user, signIn, signUp, signOut, loading }}>
-      <BrowserRouter>
+      <HashRouter>
         <div className="app">
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -61,7 +61,7 @@ function App() {
           </Routes>
           <NavBar />
         </div>
-      </BrowserRouter>
+      </HashRouter>
     </AuthContext.Provider>
   )
 }

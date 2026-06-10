@@ -109,12 +109,41 @@
   gap: 0.5rem;
 }
 
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .detail-ingredient {
   display: flex;
   align-items: baseline;
-  gap: 0.75rem;
+  gap: 0.5rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border);
+}
+
+.detail-ingredient-status {
+  flex-shrink: 0;
+  width: 24px;
+  font-size: 0.85rem;
+}
+
+.ingredient-available .detail-ingredient-name {
+  color: var(--text);
+}
+
+.ingredient-missing .detail-ingredient-name {
+  color: var(--text-light);
+}
+
+.ingredient-optional {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .detail-ingredient-qty {
