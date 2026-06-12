@@ -402,29 +402,6 @@ export default function MealPlan() {
         <button className="btn btn-sm btn-secondary" onClick={loadPlan}>↻</button>
       </div>
 
-      {/* View mode toggle + navigation */}
-      <div className="mealplan-toolbar">
-        <div className="view-toggle">
-          <button
-            className={`view-toggle-btn ${viewMode === 'week' ? 'active' : ''}`}
-            onClick={() => setViewMode('week')}
-          >
-            Semana
-          </button>
-          <button
-            className={`view-toggle-btn ${viewMode === 'month' ? 'active' : ''}`}
-            onClick={() => setViewMode('month')}
-          >
-            Mês
-          </button>
-        </div>
-        <div className="period-nav">
-          <button className="btn-icon calendar-nav" onClick={prevPeriod}>‹</button>
-          <button className="btn-today" onClick={goToToday}>Hoje</button>
-          <button className="btn-icon calendar-nav" onClick={nextPeriod}>›</button>
-        </div>
-      </div>
-
       {/* Calendar (compact, always visible) */}
       <div className="mealplan-calendar">
         <div className="calendar-grid">
@@ -452,6 +429,29 @@ export default function MealPlan() {
               </button>
             )
           })}
+        </div>
+      </div>
+
+      {/* View mode toggle + navigation */}
+      <div className="mealplan-toolbar">
+        <div className="view-toggle">
+          <button
+            className={`view-toggle-btn ${viewMode === 'week' ? 'active' : ''}`}
+            onClick={() => setViewMode('week')}
+          >
+            Semana
+          </button>
+          <button
+            className={`view-toggle-btn ${viewMode === 'month' ? 'active' : ''}`}
+            onClick={() => setViewMode('month')}
+          >
+            Mês
+          </button>
+        </div>
+        <div className="period-nav">
+          <button className="btn-icon calendar-nav" onClick={prevPeriod}>‹</button>
+          <button className="btn-today" onClick={goToToday}>Hoje</button>
+          <button className="btn-icon calendar-nav" onClick={nextPeriod}>›</button>
         </div>
       </div>
 
