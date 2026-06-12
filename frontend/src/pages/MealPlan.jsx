@@ -8,8 +8,8 @@ const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Jul
 const MEALS = [
   { key: 'breakfast', label: 'Pequeno-almoço', icon: '🌅' },
   { key: 'lunch', label: 'Almoço', icon: '🍽️' },
-  { key: 'dinner', label: 'Jantar', icon: '🌙' },
   { key: 'snack', label: 'Lanche', icon: '🍎' },
+  { key: 'dinner', label: 'Jantar', icon: '🌙' },
 ]
 
 function getMonday(d) {

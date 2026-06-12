@@ -13,8 +13,8 @@ const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Jul
 const MEALS = [
   { key: 'breakfast', label: '🌅 Pequeno-almoço' },
   { key: 'lunch', label: '🍽️ Almoço' },
-  { key: 'dinner', label: '🌙 Jantar' },
   { key: 'snack', label: '🍎 Lanche' },
+  { key: 'dinner', label: '🌙 Jantar' },
 ]
 
 function formatDate(d) {
