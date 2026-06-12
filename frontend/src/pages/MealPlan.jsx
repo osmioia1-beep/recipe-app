@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import supabase from '../supabase'
 import './MealPlan.css'
 
@@ -30,7 +30,10 @@ function getWeekDates(monday) {
 }
 
 function formatDate(d) {
-  return d.toISOString().split('T')[0]
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function isSameDay(a, b) {
@@ -44,7 +47,7 @@ function getDaysInMonth(year, month) {
 
 function getFirstDayOfMonth(year, month) {
   const day = new Date(year, month, 1).getDay()
-  return day === 0 ? 6 : day - 1 // Monday = 0
+  return day === 0 ? 6 : day - 1
 }
 
 export default function MealPlan() {
@@ -58,6 +61,16 @@ export default function MealPlan() {
   const [loading, setLoading] = useState(true)
   const [expandedDay, setExpandedDay] = useState(null)
 
+  // Day picker modal state
+  const [showDayPicker, setShowDayPicker] = useState(false)
+  const [pickerDate, setPickerDate] = useState(null) // Date object
+  const [pickerDateStr, setPickerDateStr] = useState(null) // YYYY-MM-DD
+  const [pickerRecipes, setPickerRecipes] = useState({}) // { mealKey: { id, title, prep_time } }
+  const [allRecipes, setAllRecipes] = useState([])
+  const [recipeSearch, setRecipeSearch] = useState('')
+  const [showRecipePicker, setShowRecipePicker] = useState(null) // mealKey or null
+  const [savingMeal, setSavingMeal] = useState(null) // mealKey being saved
+
   useEffect(() => {
     const monday = getMonday(selectedDate)
     setWeekDates(getWeekDates(monday))
@@ -66,6 +79,23 @@ export default function MealPlan() {
   useEffect(() => {
     loadPlan()
   }, [weekDates])
+
+  // Load all recipes for the picker (once)
+  useEffect(() => {
+    loadAllRecipes()
+  }, [])
+
+  async function loadAllRecipes() {
+    try {
+      const { data, error } = await supabase
+        .from('recipes')
+        .select('id, title, prep_time, category')
+        .order('title')
+      if (!error && data) setAllRecipes(data)
+    } catch (e) {
+      console.warn('Failed to load recipes for picker:', e)
+    }
+  }
 
   async function loadPlan() {
     setLoading(true)
@@ -115,6 +145,148 @@ export default function MealPlan() {
       console.error('Failed to load meal plan:', err)
     }
     setLoading(false)
+  }
+
+  // Load recipes for a specific date (for the day picker modal)
+  async function loadRecipesForDate(dateStr) {
+    try {
+      const { data, error } = await supabase
+        .from('meal_plans')
+        .select(`
+          id,
+          meal_type,
+          recipe:recipes(id, title, prep_time)
+        `)
+        .eq('date', dateStr)
+
+      if (error) throw error
+
+      const recipes = {}
+      if (data) {
+        for (const mp of data) {
+          if (mp.recipe) {
+            recipes[mp.meal_type] = {
+              id: mp.id,
+              title: mp.recipe.title,
+              prep_time: mp.recipe.prep_time,
+            }
+          }
+        }
+      }
+      setPickerRecipes(recipes)
+    } catch (err) {
+      console.error('Failed to load recipes for date:', err)
+      setPickerRecipes({})
+    }
+  }
+
+  function openDayPicker(date) {
+    const dateStr = formatDate(date)
+    setPickerDate(date)
+    setPickerDateStr(dateStr)
+    setShowDayPicker(true)
+    setShowRecipePicker(null)
+    setRecipeSearch('')
+    loadRecipesForDate(dateStr)
+  }
+
+  function closeDayPicker() {
+    setShowDayPicker(false)
+    setPickerDate(null)
+    setPickerDateStr(null)
+    setPickerRecipes({})
+    setShowRecipePicker(null)
+    setRecipeSearch('')
+  }
+
+  async function addRecipeToMeal(recipe, mealKey) {
+    setSavingMeal(mealKey)
+    try {
+      const { data, error } = await supabase
+        .from('meal_plans')
+        .insert({
+          user_id: '00000000-0000-0000-0000-000000000000',
+          recipe_id: recipe.id,
+          date: pickerDateStr,
+          meal_type: mealKey,
+        })
+        .select(`
+          id,
+          meal_type,
+          recipe:recipes(id, title, prep_time)
+        `)
+        .single()
+
+      if (error) throw error
+
+      // Update picker state
+      if (data && data.recipe) {
+        setPickerRecipes(prev => ({
+          ...prev,
+          [mealKey]: {
+            id: data.id,
+            title: data.recipe.title,
+            prep_time: data.recipe.prep_time,
+          }
+        }))
+      }
+
+      // Also update the week plan if the date is in the current week
+      const sortedDates = weekDates.map(d => formatDate(d))
+      if (sortedDates.includes(pickerDateStr)) {
+        const dayIndex = sortedDates.indexOf(pickerDateStr)
+        const dayName = DAYS[dayIndex]
+        setPlan(prev => ({
+          ...prev,
+          [dayName]: {
+            ...prev[dayName],
+            [mealKey]: {
+              id: data.id,
+              title: data.recipe.title,
+              prep_time: data.recipe.prep_time,
+            }
+          }
+        }))
+      }
+    } catch (err) {
+      console.error('Failed to add recipe:', err)
+    }
+    setSavingMeal(null)
+    setShowRecipePicker(null)
+    setRecipeSearch('')
+  }
+
+  async function removeRecipeFromMeal(mealKey) {
+    const existing = pickerRecipes[mealKey]
+    if (!existing?.id) return
+
+    try {
+      const { error } = await supabase
+        .from('meal_plans')
+        .delete()
+        .eq('id', existing.id)
+      if (error) throw error
+
+      // Update picker state
+      setPickerRecipes(prev => {
+        const next = { ...prev }
+        delete next[mealKey]
+        return next
+      })
+
+      // Update week plan if in current week
+      const sortedDates = weekDates.map(d => formatDate(d))
+      if (sortedDates.includes(pickerDateStr)) {
+        const dayIndex = sortedDates.indexOf(pickerDateStr)
+        const dayName = DAYS[dayIndex]
+        setPlan(prev => ({
+          ...prev,
+          [dayName]: { ...prev[dayName], [mealKey]: null }
+        }))
+      }
+    } catch (err) {
+      console.error('Failed to remove recipe:', err)
+    }
   }
 
   function removeRecipe(day, mealKey) {
@@ -185,37 +357,22 @@ export default function MealPlan() {
     const prevMonthDays = getDaysInMonth(year, month === 0 ? 11 : month - 1)
 
     const cells = []
-    // Previous month padding
     for (let i = firstDay - 1; i >= 0; i--) {
-      cells.push({
-        day: prevMonthDays - i,
-        inMonth: false,
-        date: new Date(year, month - 1, prevMonthDays - i),
-      })
+      cells.push({ day: prevMonthDays - i, inMonth: false, date: new Date(year, month - 1, prevMonthDays - i) })
     }
-    // Current month
     for (let d = 1; d <= daysInMonth; d++) {
-      cells.push({
-        day: d,
-        inMonth: true,
-        date: new Date(year, month, d),
-      })
+      cells.push({ day: d, inMonth: true, date: new Date(year, month, d) })
     }
-    // Next month padding
-    const remaining = 42 - cells.length // 6 rows x 7 cols
+    const remaining = 42 - cells.length
     for (let d = 1; d <= remaining; d++) {
-      cells.push({
-        day: d,
-        inMonth: false,
-        date: new Date(year, month + 1, d),
-      })
+      cells.push({ day: d, inMonth: false, date: new Date(year, month + 1, d) })
     }
     return cells
   }, [currentMonth])
 
   const today = new Date()
 
-  // Count meals for calendar dots
+  // Count meals for calendar dots (from all loaded data)
   const dayMealCount = useMemo(() => {
     const counts = {}
     DAYS.forEach((day, i) => {
@@ -226,6 +383,16 @@ export default function MealPlan() {
     })
     return counts
   }, [plan, weekDates])
+
+  // Filtered recipes for picker
+  const filteredRecipes = useMemo(() => {
+    if (!recipeSearch.trim()) return allRecipes
+    const q = recipeSearch.toLowerCase()
+    return allRecipes.filter(r =>
+      r.title.toLowerCase().includes(q) ||
+      (r.category && r.category.toLowerCase().includes(q))
+    )
+  }, [allRecipes, recipeSearch])
 
   return (
     <div className="page">
@@ -263,12 +430,7 @@ export default function MealPlan() {
               <button
                 key={i}
                 className={`calendar-cell ${!cell.inMonth ? 'calendar-cell-other' : ''} ${isToday ? 'calendar-cell-today' : ''} ${isSelected ? 'calendar-cell-selected' : ''}`}
-                onClick={() => {
-                  setSelectedDate(cell.date)
-                  if (!cell.inMonth) {
-                    setCurrentMonth({ year: cell.date.getFullYear(), month: cell.date.getMonth() })
-                  }
-                }}
+                onClick={() => openDayPicker(cell.date)}
               >
                 <span className="calendar-cell-day">{cell.day}</span>
                 {count > 0 && (
@@ -358,6 +520,97 @@ export default function MealPlan() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Day Picker Modal */}
+      {showDayPicker && (
+        <div className="mealplan-picker-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeDayPicker() }}>
+          <div className="mealplan-picker">
+            {showRecipePicker ? (
+              <>
+                <div className="mealplan-picker-header">
+                  <button className="plan-back-btn" onClick={() => { setShowRecipePicker(null); setRecipeSearch('') }}>← Voltar</button>
+                  <h3>{MEALS.find(m => m.key === showRecipePicker)?.label}</h3>
+                  <button className="btn-icon" onClick={closeDayPicker}>✕</button>
+                </div>
+                <div className="picker-search-wrap">
+                  <input
+                    type="text"
+                    className="picker-search-input"
+                    placeholder="Pesquisar receitas..."
+                    value={recipeSearch}
+                    onChange={e => setRecipeSearch(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="picker-recipe-list">
+                  {filteredRecipes.length === 0 ? (
+                    <div className="picker-no-results">Nenhuma receita encontrada</div>
+                  ) : (
+                    filteredRecipes.map(r => (
+                      <button
+                        key={r.id}
+                        className="picker-recipe-item"
+                        onClick={() => addRecipeToMeal(r, showRecipePicker)}
+                        disabled={savingMeal === showRecipePicker}
+                      >
+                        <div className="picker-recipe-info">
+                          <span className="picker-recipe-title">{r.title}</span>
+                          {r.prep_time && <span className="picker-recipe-time">⏱ {r.prep_time} min</span>}
+                        </div>
+                        {savingMeal === showRecipePicker ? (
+                          <span className="picker-saving">...</span>
+                        ) : (
+                          <span className="picker-recipe-add">+</span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mealplan-picker-header">
+                  <h3>
+                    {pickerDate && pickerDate.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </h3>
+                  <button className="btn-icon" onClick={closeDayPicker}>✕</button>
+                </div>
+                <div className="plan-meal-list">
+                  {MEALS.map(meal => {
+                    const existing = pickerRecipes[meal.key]
+                    return (
+                      <div key={meal.key} className="plan-meal-row">
+                        <div className="plan-meal-row-header">
+                          <span className="plan-meal-row-icon">{meal.icon}</span>
+                          <span className="plan-meal-row-label">{meal.label}</span>
+                        </div>
+                        {existing ? (
+                          <div className="plan-meal-row-recipe">
+                            <span className="plan-meal-row-title">{existing.title}</span>
+                            <button
+                              className="btn-icon mealplan-meal-remove"
+                              onClick={() => removeRecipeFromMeal(meal.key)}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className="plan-meal-add-btn"
+                            onClick={() => setShowRecipePicker(meal.key)}
+                          >
+                            + Adicionar receita
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

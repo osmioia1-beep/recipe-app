@@ -263,7 +263,7 @@
   max-width: var(--max-width);
   background: var(--card-bg);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  max-height: 70vh;
+  max-height: 75vh;
   display: flex;
   flex-direction: column;
 }
@@ -274,13 +274,168 @@
   justify-content: space-between;
   padding: 1rem;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .mealplan-picker-header h3 {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 
+/* Day picker meal list */
+.plan-meal-list {
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.plan-meal-row {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+}
+
+.plan-meal-row-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.plan-meal-row-icon {
+  font-size: 1.1rem;
+}
+
+.plan-meal-row-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.plan-meal-row-recipe {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--card-bg);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+}
+
+.plan-meal-row-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.plan-meal-add-btn {
+  width: 100%;
+  padding: 0.625rem;
+  background: none;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.plan-meal-add-btn:active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255,107,53,0.05);
+}
+
+/* Recipe search in picker */
+.picker-search-wrap {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.picker-search-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.9rem;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.picker-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.picker-recipe-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 0.5rem;
+}
+
+.picker-recipe-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem;
+  background: none;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.picker-recipe-item:active {
+  background: var(--bg);
+}
+
+.picker-recipe-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.picker-recipe-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.picker-recipe-time {
+  font-size: 0.75rem;
+  color: var(--text-light);
+}
+
+.picker-recipe-add {
+  font-size: 1.5rem;
+  color: var(--accent);
+  font-weight: 700;
+  padding: 0 0.5rem;
+}
+
+.picker-saving {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.picker-no-results {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* Back button */
+.plan-back-btn {
+  font-size: 0.875rem;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* Legacy picker items (RecipeDetail) */
 .mealplan-picker-list {
   overflow-y: auto;
   padding: 0.5rem;
