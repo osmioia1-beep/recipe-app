@@ -4,6 +4,8 @@ import supabase from '../supabase'
 import './RecipeForm.css'
 
 const CATEGORIES = ['Pratos Principais', 'Sobremesas', 'Sopas', 'Saladas', 'Pequeno-Almoço', 'Lanches', 'Outra']
+const SUGGESTED_TAGS = ['portuguesas', 'italiana', 'francesa', 'saudável', 'vegetariana', 'vegan', 'rápido', 'forno', 'grelhado', 'sopas', 'massa', 'arroz', 'peixe', 'carne', 'frango', 'sobremesas', 'bolos', 'doces', 'street food', 'tradicional']
+const UNITS = ['g', 'kg', 'ml', 'L', 'chávena', 'colher de sopa', 'colher de chá', 'unidade', 'dentes', 'fatias', 'pitada', 'q.b.']
 
 export default function RecipeForm() {
   const { id } = useParams()
@@ -20,13 +22,15 @@ export default function RecipeForm() {
     portions: 4,
     category: 'Outra',
     image_url: '',
-    tags: '',
+    tags: [],
   })
   const [ingredients, setIngredients] = useState([{ name: '', quantity: '', unit: '', optional: false }])
   const [steps, setSteps] = useState([''])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [error, setError] = useState('')
+  const [tagInput, setTagInput] = useState('')
+  const [showUnitDropdown, setShowUnitDropdown] = useState(null)
 
   useEffect(() => {
     if (isEdit) loadRecipe()
@@ -52,7 +56,7 @@ export default function RecipeForm() {
         portions: recipe.portions || 4,
         category: recipe.category || 'Outra',
         image_url: recipe.image_url || '',
-        tags: (recipe.tags || []).join(', '),
+        tags: recipe.tags || [],
       })
 
       const { data: ingData, error: iErr } = await supabase
@@ -81,6 +85,23 @@ export default function RecipeForm() {
 
   function updateForm(field, value) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  function toggleTag(tag) {
+    setForm(prev => ({
+      ...prev,
+      tags: prev.tags.includes(tag)
+        ? prev.tags.filter(t => t !== tag)
+        : [...prev.tags, tag]
+    }))
+  }
+
+  function addCustomTag() {
+    const tag = tagInput.trim().toLowerCase()
+    if (tag && !form.tags.includes(tag)) {
+      setForm(prev => ({ ...prev, tags: [...prev.tags, tag] }))
+    }
+    setTagInput('')
   }
 
   function addIngredient() {
@@ -143,7 +164,7 @@ export default function RecipeForm() {
       portions: parseInt(form.portions) || 4,
       category: form.category || null,
       image_url: form.image_url.trim() || null,
-      tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      tags: form.tags,
       steps: validSteps,
       ingredients: validIngredients.map(i => ({
         name: i.name.trim(),
@@ -155,7 +176,6 @@ export default function RecipeForm() {
 
     try {
       if (isEdit) {
-        // Update recipe
         const { error: uErr } = await supabase
           .from('recipes')
           .update({
@@ -174,7 +194,6 @@ export default function RecipeForm() {
           .eq('id', id)
         if (uErr) throw uErr
 
-        // Delete old ingredients and insert new ones
         await supabase.from('recipe_ingredients').delete().eq('recipe_id', id)
         const ingPayload = payload.ingredients.map(i => ({
           recipe_id: id,
@@ -186,7 +205,6 @@ export default function RecipeForm() {
         const { error: ingErr } = await supabase.from('recipe_ingredients').insert(ingPayload)
         if (ingErr) throw ingErr
       } else {
-        // Create recipe
         const { data: newRecipe, error: cErr } = await supabase
           .from('recipes')
           .insert({
@@ -230,27 +248,25 @@ export default function RecipeForm() {
   }
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <h1>{isEdit ? '✏️ Editar Receita' : '➕ Nova Receita'}</h1>
-      </div>
-
-      {error && <div className="form-error">{error}</div>}
-
+    <div className="page recipe-form-page">
       <form onSubmit={handleSubmit} className="recipe-form">
+        {error && <div className="form-error">{error}</div>}
+
+        {/* ─── TÍTULO ─── */}
         <div className="form-group">
-          <label>Título *</label>
+          <label className="form-label">Título *</label>
           <input
             type="text"
-            className="form-control"
+            className="form-control form-control-lg"
             value={form.title}
             onChange={e => updateForm('title', e.target.value)}
             placeholder="Ex: Bolo de Chocolate"
           />
         </div>
 
+        {/* ─── DESCRIÇÃO ─── */}
         <div className="form-group">
-          <label>Descrição</label>
+          <label className="form-label">Descrição</label>
           <textarea
             className="form-control"
             value={form.description}
@@ -260,9 +276,10 @@ export default function RecipeForm() {
           />
         </div>
 
+        {/* ─── TEMPO + PORÇÕES ─── */}
         <div className="form-row">
           <div className="form-group">
-            <label>Prep (min)</label>
+            <label className="form-label">⏱ Prep (min)</label>
             <input
               type="number"
               className="form-control"
@@ -273,7 +290,7 @@ export default function RecipeForm() {
             />
           </div>
           <div className="form-group">
-            <label>Cozedura (min)</label>
+            <label className="form-label">🔥 Cozedura (min)</label>
             <input
               type="number"
               className="form-control"
@@ -287,7 +304,7 @@ export default function RecipeForm() {
 
         <div className="form-row">
           <div className="form-group">
-            <label>Porções</label>
+            <label className="form-label">👥 Porções</label>
             <input
               type="number"
               className="form-control"
@@ -297,24 +314,7 @@ export default function RecipeForm() {
             />
           </div>
           <div className="form-group">
-            <label>Dificuldade</label>
-            <select
-              className="form-control"
-              value={form.difficulty}
-              onChange={e => updateForm('difficulty', e.target.value)}
-            >
-              <option value={1}>★ Fácil</option>
-              <option value={2}>★★ Médio</option>
-              <option value={3}>★★★ Avançado</option>
-              <option value={4}>★★★★ Difícil</option>
-              <option value={5}>★★★★★ Expert</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>Categoria</label>
+            <label className="form-label">📂 Categoria</label>
             <select
               className="form-control"
               value={form.category}
@@ -325,94 +325,173 @@ export default function RecipeForm() {
               ))}
             </select>
           </div>
-          <div className="form-group">
-            <label>Tags (separadas por vírgula)</label>
-            <input
-              type="text"
-              className="form-control"
-              value={form.tags}
-              onChange={e => updateForm('tags', e.target.value)}
-              placeholder="italiana, massa, queijo"
-            />
+        </div>
+
+        {/* ─── DIFICULDADE ─── */}
+        <div className="form-group">
+          <label className="form-label">Dificuldade</label>
+          <div className="difficulty-selector">
+            {[1, 2, 3, 4, 5].map(level => (
+              <button
+                key={level}
+                type="button"
+                className={`difficulty-btn ${form.difficulty >= level ? 'active' : ''}`}
+                onClick={() => updateForm('difficulty', level)}
+              >
+                ★
+              </button>
+            ))}
+            <span className="difficulty-label">
+              {form.difficulty <= 1 ? 'Fácil' : form.difficulty <= 2 ? 'Médio' : form.difficulty <= 3 ? 'Avançado' : form.difficulty <= 4 ? 'Difícil' : 'Expert'}
+            </span>
           </div>
         </div>
 
-        {/* Ingredients */}
+        {/* ─── TAGS ─── */}
+        <div className="form-group">
+          <label className="form-label">Tags</label>
+          <div className="tags-input-wrap">
+            <div className="chip-group">
+              {SUGGESTED_TAGS.map(tag => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`chip ${form.tags.includes(tag) ? 'active' : ''}`}
+                  onClick={() => toggleTag(tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+            <div className="tag-add-row">
+              <input
+                type="text"
+                className="form-control tag-input"
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag() } }}
+                placeholder="Tag personalizada..."
+              />
+              <button type="button" className="btn btn-sm btn-secondary" onClick={addCustomTag}>+</button>
+            </div>
+            {form.tags.length > 0 && (
+              <div className="selected-tags">
+                {form.tags.map(tag => (
+                  <span key={tag} className="chip chip-selected active" onClick={() => toggleTag(tag)}>
+                    {tag} ✕
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ─── INGREDIENTES ─── */}
         <div className="form-section">
           <div className="form-section-header">
-            <h3>🧄 Ingredientes</h3>
-            <button type="button" className="btn btn-sm btn-secondary" onClick={addIngredient}>+ Adicionar</button>
+            <h3>🧄 Ingredientes ({ingredients.length})</h3>
+            <button type="button" className="btn btn-sm btn-primary" onClick={addIngredient}>+ Adicionar</button>
           </div>
-          {ingredients.map((ing, i) => (
-            <div key={i} className="form-list-row">
-              <input
-                type="text"
-                className="form-control"
-                value={ing.quantity}
-                onChange={e => updateIngredient(i, 'quantity', e.target.value)}
-                placeholder="Qtd."
-                style={{ flex: '0 0 80px' }}
-              />
-              <input
-                type="text"
-                className="form-control"
-                value={ing.unit}
-                onChange={e => updateIngredient(i, 'unit', e.target.value)}
-                placeholder="Un."
-                style={{ flex: '0 0 60px' }}
-              />
-              <input
-                type="text"
-                className="form-control"
-                value={ing.name}
-                onChange={e => updateIngredient(i, 'name', e.target.value)}
-                placeholder="Ingrediente"
-              />
-              <label className="form-check-label" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                <input
-                  type="checkbox"
-                  checked={ing.optional}
-                  onChange={e => updateIngredient(i, 'optional', e.target.checked)}
-                  style={{ marginRight: '4px' }}
+          <div className="ingredients-list">
+            {ingredients.map((ing, i) => (
+              <div key={i} className="ingredient-card">
+                <div className="ingredient-card-top">
+                  <span className="ingredient-number">{i + 1}</span>
+                  {ingredients.length > 1 && (
+                    <button type="button" className="btn-icon btn-icon-danger" onClick={() => removeIngredient(i)}>✕</button>
+                  )}
+                </div>
+                <div className="ingredient-card-body">
+                  <input
+                    type="text"
+                    className="form-control ingredient-name-input"
+                    value={ing.name}
+                    onChange={e => updateIngredient(i, 'name', e.target.value)}
+                    placeholder="Nome do ingrediente *"
+                    autoFocus={i === ingredients.length - 1 && !ing.name}
+                  />
+                  <div className="ingredient-row">
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={ing.quantity}
+                      onChange={e => updateIngredient(i, 'quantity', e.target.value)}
+                      placeholder="Qtd."
+                    />
+                    <div className="unit-dropdown-wrap">
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={ing.unit}
+                        onChange={e => updateIngredient(i, 'unit', e.target.value)}
+                        placeholder="Un."
+                        onFocus={() => setShowUnitDropdown(i)}
+                        onBlur={() => setTimeout(() => setShowUnitDropdown(null), 200)}
+                      />
+                      {showUnitDropdown === i && (
+                        <div className="unit-dropdown">
+                          {UNITS.map(u => (
+                            <button
+                              key={u}
+                              type="button"
+                              className="unit-option"
+                              onMouseDown={() => updateIngredient(i, 'unit', u)}
+                            >
+                              {u}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <label className="ingredient-optional">
+                    <input
+                      type="checkbox"
+                      checked={ing.optional}
+                      onChange={e => updateIngredient(i, 'optional', e.target.checked)}
+                    />
+                    <span>Opcional</span>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ─── PREPARAÇÃO ─── */}
+        <div className="form-section">
+          <div className="form-section-header">
+            <h3>📋 Preparação ({steps.length})</h3>
+            <button type="button" className="btn btn-sm btn-primary" onClick={addStep}>+ Adicionar</button>
+          </div>
+          <div className="steps-list">
+            {steps.map((step, i) => (
+              <div key={i} className="step-card">
+                <div className="step-card-top">
+                  <span className="step-number">{i + 1}</span>
+                  {steps.length > 1 && (
+                    <button type="button" className="btn-icon btn-icon-danger" onClick={() => removeStep(i)}>✕</button>
+                  )}
+                </div>
+                <textarea
+                  className="form-control"
+                  value={step}
+                  onChange={e => updateStep(i, e.target.value)}
+                  placeholder={`Passo ${i + 1} — descreve o que fazer...`}
+                  rows={3}
                 />
-                Opcional
-              </label>
-              {ingredients.length > 1 && (
-                <button type="button" className="btn-icon" onClick={() => removeIngredient(i)}>✕</button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Steps */}
-        <div className="form-section">
-          <div className="form-section-header">
-            <h3>📋 Preparação</h3>
-            <button type="button" className="btn btn-sm btn-secondary" onClick={addStep}>+ Adicionar</button>
+              </div>
+            ))}
           </div>
-          {steps.map((step, i) => (
-            <div key={i} className="form-list-row">
-              <span className="form-step-num">{i + 1}</span>
-              <textarea
-                className="form-control"
-                value={step}
-                onChange={e => updateStep(i, e.target.value)}
-                placeholder={`Passo ${i + 1}`}
-                rows={2}
-              />
-              {steps.length > 1 && (
-                <button type="button" className="btn-icon" onClick={() => removeStep(i)}>✕</button>
-              )}
-            </div>
-          ))}
         </div>
 
+        {/* ─── BOTÕES ─── */}
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
             Cancelar
           </button>
           <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'A guardar...' : (isEdit ? 'Guardar alterações' : 'Criar receita')}
+            {saving ? 'A guardar...' : (isEdit ? 'Guardar' : 'Criar receita')}
           </button>
         </div>
       </form>
