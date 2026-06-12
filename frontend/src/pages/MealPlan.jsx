@@ -464,7 +464,7 @@ export default function MealPlan() {
                   const isToday = isSameDay(date, today)
                   const dayRecipes = getRecipesForDate(dateStr)
                   const filledCount = MEALS.filter(m => dayRecipes[m.key]?.title).length
-                  const dayName = DAYS_SHORT[dayIdx]
+                  const dayName = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'][dayIdx]
 
                   return (
                     <div
