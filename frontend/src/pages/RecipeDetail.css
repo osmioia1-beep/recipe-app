@@ -369,6 +369,58 @@
   color: var(--text-light, #888);
 }
 
+/* Calendar picker (used in RecipeDetail) */
+.plan-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 1rem;
+}
+
+.plan-calendar-weekday {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.25rem 0;
+  text-transform: uppercase;
+}
+
+.plan-calendar-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.1s;
+  color: var(--text);
+}
+
+.plan-calendar-cell:active {
+  background: var(--accent-light);
+  color: white;
+}
+
+.plan-calendar-cell-other {
+  opacity: 0.3;
+}
+
+.plan-calendar-cell-today {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  font-weight: 700;
+}
+
+.plan-calendar-cell-selected {
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+}
+
 /* Success */
 .plan-success {
   text-align: center;

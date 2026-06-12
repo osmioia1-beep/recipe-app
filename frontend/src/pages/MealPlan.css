@@ -127,6 +127,123 @@
   margin-top: 0.25rem;
 }
 
+/* Calendar */
+.mealplan-calendar {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.calendar-nav {
+  font-size: 1.25rem;
+  color: var(--accent);
+  padding: 0.25rem 0.5rem;
+  min-width: 36px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calendar-nav:active {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+
+.calendar-month-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  background: none;
+  color: var(--text);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.calendar-month-label:active {
+  background: var(--bg);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.25rem 0 0.125rem;
+  text-transform: uppercase;
+}
+
+.calendar-cell {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border-radius: var(--radius-sm);
+  padding: 0.125rem;
+  min-height: 36px;
+  position: relative;
+  transition: background 0.1s;
+}
+
+.calendar-cell:active {
+  background: var(--bg);
+}
+
+.calendar-cell-other {
+  opacity: 0.3;
+}
+
+.calendar-cell-today .calendar-cell-day {
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+}
+
+.calendar-cell-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.calendar-cell-day {
+  font-size: 0.85rem;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.calendar-cell-dots {
+  display: flex;
+  gap: 2px;
+  margin-top: 1px;
+}
+
+.calendar-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 /* Picker modal */
 .mealplan-picker-overlay {
   position: fixed;

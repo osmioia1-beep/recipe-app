@@ -1,19 +1,27 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import supabase from '../supabase'
 import './MealPlan.css'
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+const DAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MEALS = [
-  { key: 'breakfast', label: 'Pequeno-almoço' },
-  { key: 'lunch', label: 'Almoço' },
-  { key: 'dinner', label: 'Jantar' },
+  { key: 'breakfast', label: 'Pequeno-almoço', icon: '🌅' },
+  { key: 'lunch', label: 'Almoço', icon: '🍽️' },
+  { key: 'dinner', label: 'Jantar', icon: '🌙' },
+  { key: 'snack', label: 'Lanche', icon: '🍎' },
 ]
 
-function getWeekDates() {
-  const now = new Date()
-  const day = now.getDay()
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1)
-  const monday = new Date(now.setDate(diff))
+function getMonday(d) {
+  const date = new Date(d)
+  const day = date.getDay()
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1)
+  date.setDate(diff)
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+function getWeekDates(monday) {
   return DAYS.map((_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
@@ -21,24 +29,51 @@ function getWeekDates() {
   })
 }
 
+function formatDate(d) {
+  return d.toISOString().split('T')[0]
+}
+
+function isSameDay(a, b) {
+  if (!a || !b) return false
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+function getDaysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate()
+}
+
+function getFirstDayOfMonth(year, month) {
+  const day = new Date(year, month, 1).getDay()
+  return day === 0 ? 6 : day - 1 // Monday = 0
+}
+
 export default function MealPlan() {
-  const [weekDates, setWeekDates] = useState(getWeekDates())
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() }
+  })
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [weekDates, setWeekDates] = useState(() => getWeekDates(getMonday(new Date())))
   const [plan, setPlan] = useState({})
   const [loading, setLoading] = useState(true)
   const [expandedDay, setExpandedDay] = useState(null)
 
   useEffect(() => {
+    const monday = getMonday(selectedDate)
+    setWeekDates(getWeekDates(monday))
+  }, [selectedDate])
+
+  useEffect(() => {
     loadPlan()
-  }, [])
+  }, [weekDates])
 
   async function loadPlan() {
     setLoading(true)
     try {
-      // Get week start (Monday)
       const monday = weekDates[0]
-      const mondayStr = monday.toISOString().split('T')[0]
+      const mondayStr = formatDate(monday)
+      const sundayStr = formatDate(weekDates[6])
 
-      // Fetch meal plans from Supabase
       const { data, error } = await supabase
         .from('meal_plans')
         .select(`
@@ -48,11 +83,10 @@ export default function MealPlan() {
           recipe:recipes(id, title, prep_time)
         `)
         .gte('date', mondayStr)
-        .lt('date', getEndDateStr(monday))
+        .lte('date', sundayStr)
 
       if (error) throw error
 
-      // Build plan structure
       const initial = {}
       DAYS.forEach((day, i) => {
         initial[day] = {}
@@ -61,8 +95,7 @@ export default function MealPlan() {
         })
       })
 
-      // Fill in fetched data
-      const sortedDates = weekDates.map(d => d.toISOString().split('T')[0])
+      const sortedDates = weekDates.map(d => formatDate(d))
       if (data) {
         for (const mp of data) {
           const dayIndex = sortedDates.indexOf(mp.date)
@@ -84,17 +117,10 @@ export default function MealPlan() {
     setLoading(false)
   }
 
-  function getEndDateStr(monday) {
-    const end = new Date(monday)
-    end.setDate(end.getDate() + 7)
-    return end.toISOString().split('T')[0]
-  }
-
   function removeRecipe(day, mealKey) {
     const recipe = plan[day]?.[mealKey]
     if (!recipe?.id) return
 
-    // Remove from Supabase in background
     supabase
       .from('meal_plans')
       .delete()
@@ -103,7 +129,6 @@ export default function MealPlan() {
         if (error) console.error('Failed to remove:', error)
       })
 
-    // Update UI immediately
     setPlan(prev => ({
       ...prev,
       [day]: { ...prev[day], [mealKey]: null },
@@ -111,7 +136,6 @@ export default function MealPlan() {
   }
 
   function clearDay(day) {
-    // Remove all recipes for this day from Supabase
     const dayRecipes = plan[day] || {}
     for (const mealKey of Object.keys(dayRecipes)) {
       const recipe = dayRecipes[mealKey]
@@ -126,7 +150,6 @@ export default function MealPlan() {
       }
     }
 
-    // Update UI
     const cleared = {}
     MEALS.forEach(meal => {
       cleared[meal.key] = null
@@ -134,13 +157,75 @@ export default function MealPlan() {
     setPlan(prev => ({ ...prev, [day]: cleared }))
   }
 
-  if (loading) {
-    return (
-      <div className="page">
-        <div className="home-loading">A carregar planeamento...</div>
-      </div>
-    )
+  function prevMonth() {
+    setCurrentMonth(prev => {
+      if (prev.month === 0) return { year: prev.year - 1, month: 11 }
+      return { year: prev.year, month: prev.month - 1 }
+    })
   }
+
+  function nextMonth() {
+    setCurrentMonth(prev => {
+      if (prev.month === 11) return { year: prev.year + 1, month: 0 }
+      return { year: prev.year, month: prev.month + 1 }
+    })
+  }
+
+  function goToToday() {
+    const today = new Date()
+    setSelectedDate(today)
+    setCurrentMonth({ year: today.getFullYear(), month: today.getMonth() })
+  }
+
+  // Calendar grid
+  const calendarDays = useMemo(() => {
+    const { year, month } = currentMonth
+    const daysInMonth = getDaysInMonth(year, month)
+    const firstDay = getFirstDayOfMonth(year, month)
+    const prevMonthDays = getDaysInMonth(year, month === 0 ? 11 : month - 1)
+
+    const cells = []
+    // Previous month padding
+    for (let i = firstDay - 1; i >= 0; i--) {
+      cells.push({
+        day: prevMonthDays - i,
+        inMonth: false,
+        date: new Date(year, month - 1, prevMonthDays - i),
+      })
+    }
+    // Current month
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({
+        day: d,
+        inMonth: true,
+        date: new Date(year, month, d),
+      })
+    }
+    // Next month padding
+    const remaining = 42 - cells.length // 6 rows x 7 cols
+    for (let d = 1; d <= remaining; d++) {
+      cells.push({
+        day: d,
+        inMonth: false,
+        date: new Date(year, month + 1, d),
+      })
+    }
+    return cells
+  }, [currentMonth])
+
+  const today = new Date()
+
+  // Count meals for calendar dots
+  const dayMealCount = useMemo(() => {
+    const counts = {}
+    DAYS.forEach((day, i) => {
+      const dateStr = formatDate(weekDates[i])
+      const dayMeals = plan[day] || {}
+      const count = MEALS.filter(m => dayMeals[m.key]?.title).length
+      counts[dateStr] = count
+    })
+    return counts
+  }, [plan, weekDates])
 
   return (
     <div className="page">
@@ -148,7 +233,7 @@ export default function MealPlan() {
         <div>
           <h1>Planeamento</h1>
           <p className="subtitle">
-            Semana de {weekDates[0]?.toLocaleDateString('pt-PT')} a {weekDates[6]?.toLocaleDateString('pt-PT')}
+            {DAYS[0]} {weekDates[0]?.getDate()} — {DAYS[6]} {weekDates[6]?.getDate()} {MONTHS[weekDates[6]?.getMonth()]}
           </p>
         </div>
         <button className="btn btn-sm btn-secondary" onClick={loadPlan}>
@@ -156,75 +241,125 @@ export default function MealPlan() {
         </button>
       </div>
 
-      <div className="mealplan-week">
-        {DAYS.map((day, dayIndex) => {
-          const date = weekDates[dayIndex]
-          const isToday = date && date.toDateString() === new Date().toDateString()
-          const isExpanded = expandedDay === day
-          const dayMeals = plan[day] || {}
-          const filledCount = MEALS.filter(m => dayMeals[m.key]?.title).length
-
-          return (
-            <div key={day} className={`mealplan-day ${isToday ? 'mealplan-day-today' : ''}`}>
-              <div
-                className="mealplan-day-header"
-                onClick={() => setExpandedDay(isExpanded ? null : day)}
+      {/* Calendar */}
+      <div className="mealplan-calendar">
+        <div className="calendar-header">
+          <button className="btn-icon calendar-nav" onClick={prevMonth}>‹</button>
+          <button className="calendar-month-label" onClick={goToToday}>
+            {MONTHS[currentMonth.month]} {currentMonth.year}
+          </button>
+          <button className="btn-icon calendar-nav" onClick={nextMonth}>›</button>
+        </div>
+        <div className="calendar-grid">
+          {DAYS_SHORT.map(d => (
+            <div key={d} className="calendar-weekday">{d}</div>
+          ))}
+          {calendarDays.map((cell, i) => {
+            const dateStr = formatDate(cell.date)
+            const isToday = isSameDay(cell.date, today)
+            const isSelected = isSameDay(cell.date, selectedDate)
+            const count = dayMealCount[dateStr] || 0
+            return (
+              <button
+                key={i}
+                className={`calendar-cell ${!cell.inMonth ? 'calendar-cell-other' : ''} ${isToday ? 'calendar-cell-today' : ''} ${isSelected ? 'calendar-cell-selected' : ''}`}
+                onClick={() => {
+                  setSelectedDate(cell.date)
+                  if (!cell.inMonth) {
+                    setCurrentMonth({ year: cell.date.getFullYear(), month: cell.date.getMonth() })
+                  }
+                }}
               >
-                <div className="mealplan-day-info">
-                  <span className="mealplan-day-name">{day}</span>
-                  <span className="mealplan-day-date">
-                    {date && date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
+                <span className="calendar-cell-day">{cell.day}</span>
+                {count > 0 && (
+                  <span className="calendar-cell-dots">
+                    {Array.from({ length: Math.min(count, 4) }).map((_, j) => (
+                      <span key={j} className="calendar-dot" />
+                    ))}
                   </span>
-                </div>
-                <div className="mealplan-day-count">
-                  {filledCount > 0 && (
-                    <span className="badge badge-success">
-                      {filledCount} refeiç{filledCount > 1 ? 'ões' : 'ão'}
-                    </span>
-                  )}
-                  <span className="mealplan-expand-icon">{isExpanded ? '▲' : '▼'}</span>
-                </div>
-              </div>
-
-              {isExpanded && (
-                <div className="mealplan-day-meals">
-                  {MEALS.map(meal => {
-                    const recipe = dayMeals[meal.key]
-                    return (
-                      <div key={meal.key} className="mealplan-meal">
-                        <div className="mealplan-meal-label">{meal.label}</div>
-                        {recipe ? (
-                          <div className="mealplan-meal-recipe">
-                            <div className="mealplan-meal-info">
-                              <span className="mealplan-meal-title">{recipe.title}</span>
-                              {recipe.prep_time && (
-                                <span className="mealplan-meal-time">⏱ {recipe.prep_time} min</span>
-                              )}
-                            </div>
-                            <button
-                              className="btn-icon mealplan-meal-remove"
-                              onClick={() => removeRecipe(day, meal.key)}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="mealplan-meal-empty">Sem refeição</div>
-                        )}
-                      </div>
-                    )
-                  })}
-                  {filledCount > 0 && (
-                    <button className="btn btn-sm btn-secondary mealplan-clear-day" onClick={() => clearDay(day)}>
-                      Limpar dia
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
+                )}
+              </button>
+            )
+          })}
+        </div>
       </div>
+
+      {loading ? (
+        <div className="home-loading">A carregar planeamento...</div>
+      ) : (
+        <div className="mealplan-week">
+          {DAYS.map((day, dayIndex) => {
+            const date = weekDates[dayIndex]
+            const isToday = isSameDay(date, today)
+            const isExpanded = expandedDay === day
+            const dayMeals = plan[day] || {}
+            const filledCount = MEALS.filter(m => dayMeals[m.key]?.title).length
+
+            return (
+              <div key={day} className={`mealplan-day ${isToday ? 'mealplan-day-today' : ''}`}>
+                <div
+                  className="mealplan-day-header"
+                  onClick={() => setExpandedDay(isExpanded ? null : day)}
+                >
+                  <div className="mealplan-day-info">
+                    <span className="mealplan-day-name">{day}</span>
+                    <span className="mealplan-day-date">
+                      {date && date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
+                    </span>
+                  </div>
+                  <div className="mealplan-day-count">
+                    {filledCount > 0 && (
+                      <span className="badge badge-success">
+                        {filledCount} refeiç{filledCount > 1 ? 'ões' : 'ão'}
+                      </span>
+                    )}
+                    <span className="mealplan-expand-icon">{isExpanded ? '▲' : '▼'}</span>
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="mealplan-day-meals">
+                    {MEALS.map(meal => {
+                      const recipe = dayMeals[meal.key]
+                      return (
+                        <div key={meal.key} className="mealplan-meal">
+                          <div className="mealplan-meal-label">
+                            <span className="mealplan-meal-icon">{meal.icon}</span>
+                            {meal.label}
+                          </div>
+                          {recipe ? (
+                            <div className="mealplan-meal-recipe">
+                              <div className="mealplan-meal-info">
+                                <span className="mealplan-meal-title">{recipe.title}</span>
+                                {recipe.prep_time && (
+                                  <span className="mealplan-meal-time">⏱ {recipe.prep_time} min</span>
+                                )}
+                              </div>
+                              <button
+                                className="btn-icon mealplan-meal-remove"
+                                onClick={() => removeRecipe(day, meal.key)}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="mealplan-meal-empty">Sem refeição</div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {filledCount > 0 && (
+                      <button className="btn btn-sm btn-secondary mealplan-clear-day" onClick={() => clearDay(day)}>
+                        Limpar dia
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

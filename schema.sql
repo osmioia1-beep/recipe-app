@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS meal_plans (
     user_id     uuid NOT NULL REFERENCES auth.users(id),
     recipe_id   uuid NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
     date        date NOT NULL,
-    meal_type   text CHECK (meal_type IN ('breakfast','lunch','dinner')),
+    meal_type   text CHECK (meal_type IN ('breakfast','lunch','dinner','snack')),
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 

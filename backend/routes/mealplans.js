@@ -1,7 +1,7 @@
 import { supabase } from '../config/database.js';
 import authMiddleware from '../middleware/auth.js';
 
-const VALID_MEAL_TYPES = ['breakfast', 'lunch', 'dinner'];
+const VALID_MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 /**
  * Routes: /api/mealplans

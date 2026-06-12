@@ -8,16 +8,32 @@ import './RecipeDetail.css'
 const DUMMY_USER = '00000000-0000-0000-0000-000000000000'
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+const DAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MEALS = [
+  { key: 'breakfast', label: '🌅 Pequeno-almoço' },
   { key: 'lunch', label: '🍽️ Almoço' },
   { key: 'dinner', label: '🌙 Jantar' },
+  { key: 'snack', label: '🍎 Lanche' },
 ]
 
-function getWeekDates() {
-  const now = new Date()
-  const day = now.getDay()
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1)
-  const monday = new Date(now.setDate(diff))
+function formatDate(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function getMonday(d) {
+  const date = new Date(d)
+  const day = date.getDay()
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1)
+  date.setDate(diff)
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+function getWeekDates(monday) {
   return DAYS.map((_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
@@ -25,8 +41,18 @@ function getWeekDates() {
   })
 }
 
-function formatDate(date) {
-  return date.toISOString().split('T')[0]
+function getDaysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate()
+}
+
+function getFirstDayOfMonth(year, month) {
+  const day = new Date(year, month, 1).getDay()
+  return day === 0 ? 6 : day - 1
+}
+
+function isSameDay(a, b) {
+  if (!a || !b) return false
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
 export default function RecipeDetail() {
@@ -42,10 +68,16 @@ export default function RecipeDetail() {
 
   // Meal plan picker state
   const [showPicker, setShowPicker] = useState(false)
-  const [pickerStep, setPickerStep] = useState('day') // 'day' | 'meal' | 'success'
-  const [selectedDay, setSelectedDay] = useState(null)
+  const [pickerStep, setPickerStep] = useState('date') // 'date' | 'meal' | 'success'
   const [selectedDate, setSelectedDate] = useState(null)
+  const [selectedMeal, setSelectedMeal] = useState(null)
   const [saving, setSaving] = useState(false)
+
+  // Calendar state
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() }
+  })
 
   useEffect(() => {
     loadRecipe()
@@ -101,27 +133,42 @@ export default function RecipeDetail() {
 
   function openPicker() {
     setShowPicker(true)
-    setPickerStep('day')
-    setSelectedDay(null)
+    setPickerStep('date')
     setSelectedDate(null)
+    setSelectedMeal(null)
+    const now = new Date()
+    setCalendarMonth({ year: now.getFullYear(), month: now.getMonth() })
   }
 
   function closePicker() {
     setShowPicker(false)
-    setPickerStep('day')
-    setSelectedDay(null)
+    setPickerStep('date')
     setSelectedDate(null)
+    setSelectedMeal(null)
   }
 
-  function selectDay(dayIndex) {
-    const dates = getWeekDates()
-    setSelectedDay(DAYS[dayIndex])
-    setSelectedDate(formatDate(dates[dayIndex]))
+  function selectDate(date) {
+    setSelectedDate(formatDate(date))
     setPickerStep('meal')
   }
 
-  async function selectMeal(mealType) {
+  function prevMonth() {
+    setCalendarMonth(prev => {
+      if (prev.month === 0) return { year: prev.year - 1, month: 11 }
+      return { year: prev.year, month: prev.month - 1 }
+    })
+  }
+
+  function nextMonth() {
+    setCalendarMonth(prev => {
+      if (prev.month === 11) return { year: prev.year + 1, month: 0 }
+      return { year: prev.year, month: prev.month + 1 }
+    })
+  }
+
+  async function selectMeal(mealKey) {
     setSaving(true)
+    setSelectedMeal(mealKey)
     try {
       const userId = user?.id || DUMMY_USER
       const { error } = await supabase
@@ -130,7 +177,7 @@ export default function RecipeDetail() {
           user_id: userId,
           recipe_id: recipe.id,
           date: selectedDate,
-          meal_type: mealType,
+          meal_type: mealKey,
         })
       if (error) throw error
       setPickerStep('success')
@@ -144,6 +191,28 @@ export default function RecipeDetail() {
     }
     setSaving(false)
   }
+
+  // Calendar grid for picker
+  const calendarDays = (() => {
+    const { year, month } = calendarMonth
+    const daysInMonth = getDaysInMonth(year, month)
+    const firstDay = getFirstDayOfMonth(year, month)
+    const prevMonthDays = getDaysInMonth(year, month === 0 ? 11 : month - 1)
+    const cells = []
+    for (let i = firstDay - 1; i >= 0; i--) {
+      cells.push({ day: prevMonthDays - i, inMonth: false, date: new Date(year, month - 1, prevMonthDays - i) })
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ day: d, inMonth: true, date: new Date(year, month, d) })
+    }
+    const remaining = 42 - cells.length
+    for (let d = 1; d <= remaining; d++) {
+      cells.push({ day: d, inMonth: false, date: new Date(year, month + 1, d) })
+    }
+    return cells
+  })()
+
+  const today = new Date()
 
   if (loading) {
     return <div className="page"><div className="detail-loading">A carregar...</div></div>
@@ -171,7 +240,7 @@ export default function RecipeDetail() {
   const allAvailable = availableCount === totalIngredients && totalIngredients > 0
   const hasPantry = pantryItems.length > 0 && pantryLoaded
 
-  const weekDates = getWeekDates()
+  const weekDates = getWeekDates(getMonday(new Date()))
 
   return (
     <div className="recipe-detail">
@@ -287,68 +356,70 @@ export default function RecipeDetail() {
       {showPicker && (
         <div className="mealplan-picker-overlay" onClick={(e) => { if (e.target === e.currentTarget) closePicker() }}>
           <div className="mealplan-picker">
-            <>
-              {pickerStep === 'day' && (
-                <>
-                  <div className="mealplan-picker-header">
-                    <h3>Escolhe o dia</h3>
-                    <button className="btn-icon" onClick={closePicker}>✕</button>
-                  </div>
-                  <div className="plan-day-list">
-                    {DAYS.map((day, i) => {
-                      const date = weekDates[i]
-                      const isToday = date.toDateString() === new Date().toDateString()
-                      return (
-                        <button key={day} className="plan-day-item" onClick={() => selectDay(i)}>
-                          <div>
-                            <span className="plan-day-name">{day}</span>
-                            <span className="plan-day-date">
-                              {date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}
-                              {isToday && ' (hoje)'}
-                            </span>
-                          </div>
-                          <span className="plan-day-arrow">→</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
-
-              {pickerStep === 'meal' && (
-                <>
-                  <div className="mealplan-picker-header">
-                    <button className="plan-back-btn" onClick={() => setPickerStep('day')}>← Voltar</button>
-                    <h3>{selectedDay}</h3>
-                    <button className="btn-icon" onClick={closePicker}>✕</button>
-                  </div>
-                  <p className="plan-selected-day">
-                    {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })}
-                  </p>
-                  <div className="plan-meal-list">
-                    {MEALS.map(meal => (
-                      <button key={meal.key} className="plan-meal-item" onClick={() => selectMeal(meal.key)} disabled={saving}>
-                        <span className="plan-meal-label">{meal.label}</span>
-                        <span className="plan-meal-arrow">→</span>
+            {pickerStep === 'date' && (
+              <>
+                <div className="mealplan-picker-header">
+                  <button className="plan-back-btn" onClick={prevMonth}>‹</button>
+                  <h3 className="picker-month-label">
+                    {MONTHS[calendarMonth.month]} {calendarMonth.year}
+                  </h3>
+                  <button className="plan-back-btn" onClick={nextMonth}>›</button>
+                </div>
+                <div className="plan-calendar-grid">
+                  {DAYS_SHORT.map(d => (
+                    <div key={d} className="plan-calendar-weekday">{d}</div>
+                  ))}
+                  {calendarDays.map((cell, i) => {
+                    const dateStr = formatDate(cell.date)
+                    const isToday = isSameDay(cell.date, today)
+                    const isSelected = selectedDate === dateStr
+                    return (
+                      <button
+                        key={i}
+                        className={`plan-calendar-cell ${!cell.inMonth ? 'plan-calendar-cell-other' : ''} ${isToday ? 'plan-calendar-cell-today' : ''} ${isSelected ? 'plan-calendar-cell-selected' : ''}`}
+                        onClick={() => selectDate(cell.date)}
+                      >
+                        {cell.day}
                       </button>
-                    ))}
-                  </div>
-                </>
-              )}
+                    )
+                  })}
+                </div>
+              </>
+            )}
 
-              {pickerStep === 'success' && (
-                <>
-                  <div className="mealplan-picker-header">
-                    <h3>✅ Sucesso!</h3>
-                    <button className="btn-icon" onClick={closePicker}>✕</button>
-                  </div>
-                  <div className="plan-success">
-                    <span className="plan-success-icon">🎉</span>
-                    <p>Receita adicionada ao planeamento!</p>
-                  </div>
-                </>
-              )}
-            </>
+            {pickerStep === 'meal' && (
+              <>
+                <div className="mealplan-picker-header">
+                  <button className="plan-back-btn" onClick={() => setPickerStep('date')}>← Voltar</button>
+                  <h3>Escolhe a refeição</h3>
+                  <button className="btn-icon" onClick={closePicker}>✕</button>
+                </div>
+                <p className="plan-selected-day">
+                  {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+                <div className="plan-meal-list">
+                  {MEALS.map(meal => (
+                    <button key={meal.key} className="plan-meal-item" onClick={() => selectMeal(meal.key)} disabled={saving}>
+                      <span className="plan-meal-label">{meal.label}</span>
+                      <span className="plan-meal-arrow">→</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {pickerStep === 'success' && (
+              <>
+                <div className="mealplan-picker-header">
+                  <h3>✅ Sucesso!</h3>
+                  <button className="btn-icon" onClick={closePicker}>✕</button>
+                </div>
+                <div className="plan-success">
+                  <span className="plan-success-icon">🎉</span>
+                  <p>Receita adicionada ao planeamento!</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
