@@ -3,7 +3,6 @@ import supabase from '../supabase'
 import './MealPlan.css'
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-const DAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MEALS = [
   { key: 'breakfast', label: 'Pequeno-almoço', icon: '🌅' },
@@ -39,15 +38,6 @@ function formatDate(d) {
 function isSameDay(a, b) {
   if (!a || !b) return false
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-}
-
-function getDaysInMonth(year, month) {
-  return new Date(year, month + 1, 0).getDate()
-}
-
-function getFirstDayOfMonth(year, month) {
-  const day = new Date(year, month, 1).getDay()
-  return day === 0 ? 6 : day - 1
 }
 
 // Get all weeks in a month (each week is Mon-Sun)
@@ -347,37 +337,7 @@ export default function MealPlan() {
     loadPlan()
   }
 
-  // Calendar grid for month view
-  const calendarDays = useMemo(() => {
-    const { year, month } = currentMonth
-    const daysInMonth = getDaysInMonth(year, month)
-    const firstDay = getFirstDayOfMonth(year, month)
-    const prevMonthDays = getDaysInMonth(year, month === 0 ? 11 : month - 1)
-    const cells = []
-    for (let i = firstDay - 1; i >= 0; i--) {
-      cells.push({ day: prevMonthDays - i, inMonth: false, date: new Date(year, month - 1, prevMonthDays - i) })
-    }
-    for (let d = 1; d <= daysInMonth; d++) {
-      cells.push({ day: d, inMonth: true, date: new Date(year, month, d) })
-    }
-    const remaining = 42 - cells.length
-    for (let d = 1; d <= remaining; d++) {
-      cells.push({ day: d, inMonth: false, date: new Date(year, month + 1, d) })
-    }
-    return cells
-  }, [currentMonth])
-
-  // Meal count for calendar dots
-  const dayMealCount = useMemo(() => {
-    const counts = {}
-    for (const dateStr of Object.keys(plan.byDate || {})) {
-      const meals = plan.byDate[dateStr]
-      const count = MEALS.filter(m => meals[m.key]?.title).length
-      if (count > 0) counts[dateStr] = count
-    }
-    return counts
-  }, [plan])
-
+  // Filtered recipes
   const filteredRecipes = useMemo(() => {
     if (!recipeSearch.trim()) return allRecipes
     const q = recipeSearch.toLowerCase()
@@ -400,36 +360,6 @@ export default function MealPlan() {
           <p className="subtitle">{headerSubtitle}</p>
         </div>
         <button className="btn btn-sm btn-secondary" onClick={loadPlan}>↻</button>
-      </div>
-
-      {/* Calendar (compact, always visible) */}
-      <div className="mealplan-calendar">
-        <div className="calendar-grid">
-          {DAYS_SHORT.map(d => (
-            <div key={d} className="calendar-weekday">{d}</div>
-          ))}
-          {calendarDays.map((cell, i) => {
-            const dateStr = formatDate(cell.date)
-            const isToday = isSameDay(cell.date, today)
-            const count = dayMealCount[dateStr] || 0
-            return (
-              <button
-                key={i}
-                className={`calendar-cell ${!cell.inMonth ? 'calendar-cell-other' : ''} ${isToday ? 'calendar-cell-today' : ''}`}
-                onClick={() => openDayPicker(cell.date)}
-              >
-                <span className="calendar-cell-day">{cell.day}</span>
-                {count > 0 && (
-                  <span className="calendar-cell-dots">
-                    {Array.from({ length: Math.min(count, 4) }).map((_, j) => (
-                      <span key={j} className="calendar-dot" />
-                    ))}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
       </div>
 
       {/* View mode toggle + navigation */}
